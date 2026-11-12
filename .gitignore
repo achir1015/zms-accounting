@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+tests/_db/
+build/
+dist/
+dist-installer/
+packaging/mariadb/
+*.spec
