@@ -16,7 +16,7 @@ copyright = "© 2026 吳玉柱"
 path = "."
 exclude = ["tests", "tools", "packaging", "data", "data_mobile", ".venv", "dist", "dist-installer", "dist-mac",
            "dist-android", "build", "build-mac", "android", "docs", "run_web.py", "run_web_mobile.py", "*.spec",
-           "assets/icon.ico", "build-mac.log"]
+           "assets/icon.ico", "dist-ios", "run_web_tablet.py", "*.log"]
 
 [tool.flet.deep_linking]
 scheme = "zmsacct"
