@@ -20,6 +20,7 @@ ICONS = {"intro": (ft.Icons.WB_SUNNY, "amber"), "quickstart": (ft.Icons.ROCKET_L
          "year_end": (ft.Icons.EVENT_AVAILABLE, "orange"), "users": (ft.Icons.ADMIN_PANEL_SETTINGS, "rose"),
          "company": (ft.Icons.BUSINESS, "rose"), "backup": (ft.Icons.BACKUP, "rose"),
          "update": (ft.Icons.SYSTEM_UPDATE, "rose"), "shortcut": (ft.Icons.SHORTCUT, "green"),
+         "mobile_link": (ft.Icons.PHONE_ANDROID, "rose"), "mobile_app": (ft.Icons.SMARTPHONE, "teal"),
          # 前言：系統導入
          "adopt_overview": (ft.Icons.MAP, "blue"), "adopt_company": (ft.Icons.STOREFRONT, "teal"),
          "adopt_prepare": (ft.Icons.CHECKLIST, "amber"), "adopt_data": (ft.Icons.TABLE_CHART, "orange"),
@@ -60,7 +61,7 @@ class Help(ft.Row):
         self.body = ft.Column(spacing=14, scroll=ft.ScrollMode.AUTO, expand=True)
         super().__init__([T.card(self.toc, width=300, padding=12),
                           ft.Column([self.banner, T.card(self.body, expand=True, padding=26)], expand=True,
-                                    spacing=14)], expand=True, spacing=14,
+                                    spacing=14)], expand=True, spacing=14, data="split",
                          vertical_alignment=ft.CrossAxisAlignment.START)
         self.show(self.sec, refresh=False)
 

@@ -1,4 +1,4 @@
-"""備份還原、版本更新、桌面捷徑。"""
+﻿"""備份還原、版本更新、桌面捷徑。"""
 import gzip
 import json
 import os
@@ -68,20 +68,27 @@ def _ver(s):
     return tuple(out + [0] * (3 - len(out)))
 
 
-def asset_suffix():
+def _plat(platform=None):
+    if platform:
+        return platform
     if os.name == "nt":
-        return "-Setup-"
+        return "windows"
     if sys.platform == "darwin":
-        return "-mac.dmg"
+        return "mac"
     return ""
 
 
-def asset_name(ver):
-    """發佈檔名：Windows ZMSAccounting-Setup-1.2.0.exe；macOS ZMSAccounting-1.2.0-mac.dmg"""
-    if os.name == "nt":
+def asset_suffix(platform=None):
+    return {"windows": "-Setup-", "mac": "-mac.dmg", "android": "-android.apk"}.get(_plat(platform), "")
+
+
+def asset_name(ver, platform=None):
+    """發佈檔名：Windows ZMSAccounting-Setup-1.2.0.exe；macOS …-1.2.0-mac.dmg；Android …-1.2.0-android.apk"""
+    p = _plat(platform)
+    if p == "windows":
         return "%s-Setup-%s.exe" % (APP_ID, ver)
-    if sys.platform == "darwin":
-        return "%s-%s-mac.dmg" % (APP_ID, ver)
+    if p in ("mac", "android"):
+        return "%s-%s-%s" % (APP_ID, ver, "mac.dmg" if p == "mac" else "android.apk")
     return ""
 
 
@@ -95,7 +102,7 @@ def current_app_bundle():
     return p if p.endswith(".app") else ""
 
 
-def _latest_via_page(timeout):
+def _latest_via_page(timeout, platform=None):
     """GitHub API 有匿名次數限制（每小時 60 次／每個網路）；改從發佈頁的轉址取得最新版號（無次數限制）。"""
     req = urllib.request.Request("https://github.com/%s/releases/latest" % GITHUB_REPO, method="HEAD",
                                  headers={"User-Agent": APP_ID})
@@ -106,14 +113,14 @@ def _latest_via_page(timeout):
         raise RuntimeError("找不到發佈版本")
     ver = tag.lstrip("vV")
     assets = []
-    name = asset_name(ver)
+    name = asset_name(ver, platform)
     if name:
         assets = [dict(name=name, size=0, browser_download_url="https://github.com/%s/releases/download/%s/%s"
                        % (GITHUB_REPO, tag, name))]
     return dict(tag_name=tag, body="（更新內容請按「前往發佈頁」查看）", assets=assets, html_url=final)
 
 
-def check_update(timeout=8):
+def check_update(timeout=8, platform=None):
     """回傳 None（已是最新）或 dict(version, notes, url, size, name)。"""
     req = urllib.request.Request("https://api.github.com/repos/%s/releases/latest" % GITHUB_REPO,
                                  headers={"Accept": "application/vnd.github+json", "User-Agent": APP_ID})
@@ -123,13 +130,13 @@ def check_update(timeout=8):
     except urllib.error.HTTPError as e:
         if e.code not in (403, 429):
             raise
-        rel = _latest_via_page(timeout)
+        rel = _latest_via_page(timeout, platform)
     tag = rel.get("tag_name", "")
     if _ver(tag) <= _ver(APP_VERSION):
         return None
-    suffix = asset_suffix()
+    suffix = asset_suffix(platform)
     asset = next((a for a in rel.get("assets", []) if suffix and suffix in a["name"]
-                  and a["name"].lower().endswith((".exe", ".dmg"))), None)
+                  and a["name"].lower().endswith((".exe", ".dmg", ".apk"))), None)
     return dict(version=tag.lstrip("vV"), notes=rel.get("body") or "", url=asset["browser_download_url"] if asset
                 else rel.get("html_url"), size=asset["size"] if asset else 0, name=asset["name"] if asset else "",
                 page=rel.get("html_url"))

@@ -24,6 +24,10 @@ DANGER = "#DC2626"
 WARN = "#D97706"
 SIDEBAR_TOP = "#0F2747"
 SIDEBAR_BOTTOM = "#1B3E6F"
+MOBILE = False          # 手機版（直向窄螢幕）時由 mobile.start() 設為 True
+PHONE_W = 340           # 手機上單一控制項的最大寬度
+READY = "mobile-ready"  # 控制項 data 設為此值：已專為手機排版，mobilize 不再處理
+MZ_OFF = set()          # 開發除錯：暫時關閉某些手機版面規則
 
 # 圖示方塊的色調：(底色, 圖示色)
 TONES = {
@@ -92,6 +96,12 @@ def muted(text, size=13, **kw):
 
 
 def page_header(icon, title, subtitle="", tone="blue", actions=None):
+    if MOBILE:
+        head = ft.Row([icon_tile(icon, tone, 40, radius=12),
+                       ft.Column([title_text(title, 19), muted(subtitle, 12)] if subtitle else [title_text(title, 19)],
+                                 spacing=0, expand=True)], spacing=10)
+        return ft.Column([head] + ([ft.Row(list(actions), wrap=True, spacing=8, run_spacing=8)] if actions else []),
+                         spacing=8)
     return ft.Row([
         icon_tile(icon, tone, 48, radius=14),
         ft.Column([title_text(title), muted(subtitle)] if subtitle else [title_text(title)], spacing=0,
@@ -173,14 +183,88 @@ def empty_state(icon, text, sub=""):
 def kpi(title, value, icon, tone, sub="", on_click=None):
     bg, fg = TONES[tone]
     return ft.Container(
-        ft.Row([icon_tile(icon, tone, 52, radius=16),
-                ft.Column([muted(title, 13), ft.Text(value, size=22, weight=ft.FontWeight.W_800, color=TEXT,
-                                                     no_wrap=True), muted(sub or " ", 11)],
-                          spacing=1, expand=True)], spacing=14),
-        padding=18, bgcolor=CARD, border_radius=18, border=ft.Border.all(1, LINE), expand=True, on_click=on_click,
+        ft.Row([icon_tile(icon, tone, 36 if MOBILE else 52, radius=12 if MOBILE else 16),
+                ft.Column([muted(title, 12 if MOBILE else 13),
+                           ft.Text(value, size=(16 if len(value) <= 7 else 13 if len(value) <= 10 else 11)
+                                   if MOBILE else 22, weight=ft.FontWeight.W_800, color=TEXT,
+                                   no_wrap=True), muted(sub or " ", 11)],
+                          spacing=1, expand=True)], spacing=10 if MOBILE else 14),
+        padding=12 if MOBILE else 18, bgcolor=CARD, border_radius=18, border=ft.Border.all(1, LINE), expand=True, on_click=on_click,
         shadow=ft.BoxShadow(blur_radius=18, spread_radius=-6, color="#1A1E3A5F", offset=ft.Offset(0, 6)),
         gradient=ft.LinearGradient(begin=ft.Alignment.TOP_LEFT, end=ft.Alignment.BOTTOM_RIGHT,
                                    colors=[CARD, ft.Colors.with_opacity(0.45, bg)]))
+
+
+def kpis(items, spacing=16):
+    """關鍵數字卡片一列：電腦版一排，手機版兩欄換行。"""
+    if MOBILE:
+        for k in items:
+            k.expand = False
+            k.col = 6
+        return ft.ResponsiveRow(items, spacing=10, run_spacing=10)
+    return ft.Row(items, spacing=spacing)
+
+
+def split(left, right, spacing=14):
+    """左右兩欄（清單＋明細）：手機版改成上下排列。"""
+    if MOBILE:
+        return ft.Column([left, right], spacing=12)
+    return ft.Row([left, right], expand=True, spacing=spacing, vertical_alignment=ft.CrossAxisAlignment.START)
+
+
+def mobilize(c, parent="col", bounded=False):
+    """手機版版面轉換（可重複執行）：取消 expand、限制過寬的寬度、表格固定高度、橫列自動換行、
+    不在固定高度容器內的直欄取消各自捲動（整頁一起捲）。"""
+    if c is None or isinstance(c, (str, int, float)):
+        return
+    if getattr(c, "data", None) == READY:          # 已專為手機排版的區塊
+        return
+    if isinstance(c, Grid):
+        if "grid" not in MZ_OFF:
+            c.fit_mobile()
+        return
+    # 左右兩欄的畫面（data="split"）：改成一欄、填滿寬度
+    if isinstance(c, ft.Row) and getattr(c, "data", None) == "split":
+        c.controls = [ft.Column(list(c.controls), expand=True, spacing=12, data="split-col",
+                                horizontal_alignment=ft.CrossAxisAlignment.STRETCH)]
+        c.data = "split-done"
+    # 直向的 expand 在整頁捲動時會出錯；橫列內的 expand 則是限制寬度用，保留
+    if (getattr(c, "expand", None) and parent == "col" and getattr(c, "data", None) != "split-col"
+            and "expand" not in MZ_OFF):
+        c.expand = False
+    w = getattr(c, "width", None)
+    if isinstance(w, (int, float)) and w > PHONE_W and not isinstance(c, ft.Image) and "width" not in MZ_OFF:
+        c.width = PHONE_W if parent == "row" else None
+    if isinstance(c, ft.Column) and getattr(c, "scroll", None) and not bounded and "scroll" not in MZ_OFF:
+        c.scroll = None
+    # 只含一般欄位、按鈕的橫列：可以安全地自動換行（含直欄或 expand 子項的橫列換行會出錯，不動）
+    if (isinstance(c, ft.Row) and not getattr(c, "scroll", None) and not c.wrap and c.controls
+            and getattr(c, "data", None) not in ("split-done",) and "rowwrap" not in MZ_OFF
+            and not any(isinstance(x, (ft.Column, ft.Row, ft.ResponsiveRow)) or getattr(x, "expand", None)
+                        for x in c.controls)):
+        c.wrap = True
+        c.run_spacing = c.run_spacing or 8
+    if isinstance(c, ft.Container) and getattr(c, "height", None):
+        bounded = True
+    kind = "row" if isinstance(c, ft.Row) else "col"
+    for child in (getattr(c, "controls", None) or []):
+        mobilize(child, kind, bounded)
+    content = getattr(c, "content", None)
+    if content is not None and not isinstance(content, str):
+        mobilize(content, "col", bounded)
+
+
+def install_mobile_hooks():
+    """手機版：任何控制項更新前先做版面轉換（畫面重新產生的部分也適用）。"""
+    orig = ft.Control.update
+
+    def update(self, *a, **kw):
+        try:
+            mobilize(self)
+        except Exception:
+            pass
+        return orig(self, *a, **kw)
+    ft.Control.update = update
 
 
 # ---------------------------------------------------------------- 資料表
@@ -212,6 +296,13 @@ class Grid(ft.Column):
         super().__init__([ft.Container(self.body, border=ft.Border.all(1, LINE), border_radius=12, bgcolor=CARD,
                                        expand=height is None, height=height),
                           self.footer], expand=height is None, spacing=6)
+
+    def fit_mobile(self, height=440):
+        """手機：表格固定高度（整頁捲動時，表格自己在框內捲動）。"""
+        self.expand = False
+        box = self.controls[0]
+        box.expand = False
+        box.height = box.height or height
 
     def _select_all(self, e):
         on = str(getattr(e, "data", "")).lower() == "true"
@@ -271,13 +362,19 @@ class Grid(ft.Column):
         self.footer.controls = info
         self.body.controls = [ft.Row([self.table], scroll=ft.ScrollMode.AUTO)] if self.data_rows else [self.empty]
 
+    def csv_text(self):
+        import io
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow([c[1] for c in self.cols])
+        for r in self.data_rows:
+            w.writerow([(show(r.get(c[0]), c[2]).replace(",", "") if c[2] in ("n", "nz") else
+                         show(r.get(c[0]), "" if c[2] in ("status", "vtype") else c[2])) for c in self.cols])
+        return buf.getvalue()
+
     def export_csv(self, path):
         with open(path, "w", encoding="utf-8-sig", newline="") as f:
-            w = csv.writer(f)
-            w.writerow([c[1] for c in self.cols])
-            for r in self.data_rows:
-                w.writerow([(show(r.get(c[0]), c[2]).replace(",", "") if c[2] in ("n", "nz") else
-                             show(r.get(c[0]), "" if c[2] in ("status", "vtype") else c[2])) for c in self.cols])
+            f.write(self.csv_text())
 
 
 # ---------------------------------------------------------------- 畫面共用環境
@@ -314,17 +411,23 @@ class Ctx:
             self.page.pop_dialog()
             on_yes()
         self.page.show_dialog(ft.AlertDialog(
-            modal=True, icon=icon_tile(ft.Icons.HELP_OUTLINE if not danger else ft.Icons.WARNING_AMBER,
-                                       "rose" if danger else "blue", 44),
+            modal=True, icon=ft.Row([icon_tile(ft.Icons.HELP_OUTLINE if not danger else ft.Icons.WARNING_AMBER,
+                                               "rose" if danger else "blue", 44)], alignment=ft.MainAxisAlignment.CENTER),
             title=ft.Text(title, size=18, weight=ft.FontWeight.W_700), content=ft.Text(msg, size=14),
             actions=[btn("取消", kind="ghost", on_click=lambda e: self.page.pop_dialog()),
                      btn(yes, on_click=go, bgcolor=DANGER if danger else PRIMARY)]))
 
     def dialog(self, title, content, actions, icon=None, tone="blue", width=560):
+        if MOBILE:
+            mobilize(content)
+            width = None
+            content = ft.Column([content], scroll=ft.ScrollMode.AUTO, tight=True)
         self.page.show_dialog(ft.AlertDialog(
-            modal=True, icon=icon_tile(icon, tone, 44) if icon else None,
+            modal=True,
+            icon=ft.Row([icon_tile(icon, tone, 44)], alignment=ft.MainAxisAlignment.CENTER) if icon else None,
             title=ft.Text(title, size=18, weight=ft.FontWeight.W_700),
-            content=ft.Container(content, width=width), actions=actions, shape=ft.RoundedRectangleBorder(radius=18)))
+            content=ft.Container(content, width=width), actions=actions, shape=ft.RoundedRectangleBorder(radius=18),
+            inset_padding=ft.Padding.symmetric(horizontal=12, vertical=24) if MOBILE else None))
 
     def close(self):
         self.page.pop_dialog()
@@ -335,10 +438,54 @@ class Ctx:
             path += "." + ext
         return path
 
+    async def save_generated(self, filename, writer, open_after=True):
+        """產生檔案（writer(path) 負責寫入）：電腦版另存後開啟；手機版存到手機。"""
+        if MOBILE:
+            import tempfile
+            p = os.path.join(tempfile.gettempdir(), filename)
+            writer(p)
+            with open(p, "rb") as f:
+                await self.save_bytes(filename, f.read())
+            return
+        path = await self.save_as(filename, filename.rsplit(".", 1)[-1])
+        if path:
+            writer(path)
+            if open_after:
+                open_file(path)
+        return path
+
+    async def pick_csv(self, title):
+        """選 CSV 檔，回傳本機路徑（手機版讀入內容後存到暫存檔）。"""
+        files = await ft.FilePicker().pick_files(dialog_title=title, allowed_extensions=["csv"], with_data=MOBILE)
+        if not files:
+            return ""
+        f = files[0]
+        if f.path and os.path.isfile(f.path):
+            return f.path
+        if f.bytes:
+            import tempfile
+            p = os.path.join(tempfile.gettempdir(), "import_" + (f.name or "data.csv"))
+            with open(p, "wb") as out:
+                out.write(f.bytes)
+            return p
+        return ""
+
+    async def save_bytes(self, filename, data):
+        """手機：把檔案另存到手機（Android 會開啟儲存位置選擇）。"""
+        ext = filename.rsplit(".", 1)[-1]
+        path = await ft.FilePicker().save_file(dialog_title="儲存檔案", file_name=filename, allowed_extensions=[ext],
+                                               src_bytes=data)
+        if path:
+            self.toast("已儲存：%s（可用瀏覽器或 Excel 開啟）" % os.path.basename(path))
+
     def export_button(self, grid, name):
         async def go(e):
             if not grid.data_rows:
                 self.toast("沒有資料可以匯出", True)
+                return
+            if MOBILE:
+                await self.save_bytes("%s_%s.csv" % (name, rocdate.today().strftime("%Y%m%d")),
+                                      grid.csv_text().encode("utf-8-sig"))
                 return
             path = await self.save_as("%s_%s.csv" % (name, rocdate.today().strftime("%Y%m%d")), "csv")
             if path:

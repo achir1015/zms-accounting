@@ -1,4 +1,4 @@
-"""系統管理：使用者與權限、公司設定、備份還原、版本更新與捷徑、操作紀錄。"""
+﻿"""系統管理：使用者與權限、公司設定、備份還原、版本更新與捷徑、操作紀錄。"""
 import os
 import threading
 import time
@@ -28,7 +28,7 @@ class Users(ft.Row):
             ft.Column([T.page_header(ft.Icons.ADMIN_PANEL_SETTINGS, "使用者與權限", "角色範本＋逐項權限", "rose",
                                      [T.btn("新增", ft.Icons.PERSON_ADD, lambda e: self.edit(None))]),
                        T.card(self.list, expand=True, padding=12)], width=400, spacing=12),
-            T.card(self.form, expand=True, padding=20)], expand=True, spacing=14,
+            T.card(self.form, expand=True, padding=20)], expand=True, spacing=14, data="split",
             vertical_alignment=ft.CrossAxisAlignment.START)
         self.reload()
         self.edit(None, refresh=False)
@@ -164,7 +164,7 @@ class Backup(ft.Column):
                             T.btn("選擇備份檔", ft.Icons.UPLOAD_FILE, self.restore, kind="danger")),
                 action_card(ft.Icons.FOLDER_OPEN, "sky", "資料資料夾", "設定檔、資料庫與紀錄檔所在位置",
                             T.btn("開啟資料夾", ft.Icons.FOLDER_OPEN, lambda e: T.open_file(data_dir()),
-                                  kind="outline"))], spacing=14),
+                                  kind="outline"))], spacing=14, data="split"),
             ft.Row([self.busy, self.msg]),
             T.card(ft.Column([ft.Row([T.muted(k, 13, width=90), ft.Text(v, size=13, selectable=True)])
                               for k, v in info], spacing=8), padding=18)], spacing=14, expand=True)
@@ -245,7 +245,7 @@ class Update(ft.Column):
                     T.btn("在桌面建立替身" if MAC else "重建桌面捷徑",
                           ft.Icons.DESKTOP_MAC if MAC else ft.Icons.DESKTOP_WINDOWS, lambda e: self.shortcut(),
                           kind="accent")],
-                    spacing=10), width=340, padding=22)], spacing=14, vertical_alignment=ft.CrossAxisAlignment.START),
+                    spacing=10), width=340, padding=22)], spacing=14, vertical_alignment=ft.CrossAxisAlignment.START, data="split"),
             T.card(ft.Column([ft.Text("系統資訊", size=15, weight=ft.FontWeight.W_700),
                               T.muted("系統開發：吳玉柱 先生 與 Claude AI Opus 5.5", 13),
                               T.muted("資料庫：MariaDB　介面：Flet　語音：微軟神經語音／Windows 內建語音", 13)],
@@ -324,6 +324,91 @@ class Update(ft.Column):
         self.ctx.guard(maintenance.create_desktop_shortcut, ok="桌面替身已建立" if MAC else "桌面捷徑已建立")
 
 
+# ====================================================================== 手機連線
+def qr_png(text, box=6):
+    import io
+
+    import qrcode
+    q = qrcode.QRCode(border=2, box_size=box, error_correction=qrcode.constants.ERROR_CORRECT_M)
+    q.add_data(text)
+    q.make(fit=True)
+    buf = io.BytesIO()
+    q.make_image(fill_color="#14325C", back_color="white").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def deep_link(url):
+    import urllib.parse
+    return "zmsacct://connect?u=" + urllib.parse.quote(url, safe="")
+
+
+class MobileLink(ft.Column):
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.app = ctx.app
+        st = self.app.st
+        self.port = T.field("連接埠", str(st.extra.get("api_port") or 8765), width=110)
+        self.sw = T.switch("啟用手機連線服務", bool(self.app.api and self.app.api.running), on_change=self.toggle)
+        self.status = ft.Container()
+        self.urls = ft.Row(wrap=True, spacing=14, run_spacing=14)
+        super().__init__([
+            T.page_header(ft.Icons.PHONE_ANDROID, "手機連線", "讓 Android／iPhone／iPad 透過這台電腦使用會計系統", "rose"),
+            T.card(ft.Column([
+                ft.Row([self.sw, self.port, self.status], spacing=18,
+                       vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
+                T.muted("手機用自己的帳號密碼登入，權限與電腦版相同；手機不會直接連資料庫。"
+                        "這台電腦要保持開機並開著會計系統，手機才連得到。", 12),
+                T.muted("第一次啟用時，Windows 會詢問是否允許網路存取，請勾選「私人網路」後按「允許」。", 12)],
+                spacing=10), padding=18),
+            ft.Text("公司內（同一個 Wi-Fi）", size=16, weight=ft.FontWeight.W_700),
+            self.urls,
+            T.card(ft.Row([T.icon_tile(ft.Icons.PUBLIC, "violet", 44),
+                           ft.Column([ft.Text("外出連線", size=15, weight=ft.FontWeight.W_700),
+                                      T.muted("外出時透過加密的公開網址連回這台電腦，設定方式請見下一版說明。", 12)],
+                                     spacing=2, expand=True)], spacing=12), padding=16)],
+            spacing=14, expand=True, scroll=ft.ScrollMode.AUTO)
+        self.render(refresh=False)
+
+    def toggle(self, e):
+        st = self.app.st
+        try:
+            st.extra["api_port"] = int(self.port.value or 8765)
+        except ValueError:
+            self.ctx.toast("連接埠要是數字", True)
+            return
+        if self.sw.value:
+            self.app.stop_api()
+            if not self.ctx.guard(self.app.start_api):
+                self.sw.value = False
+        else:
+            self.app.stop_api()
+        st.extra["api_enabled"] = bool(self.sw.value)
+        st.save()
+        self.ctx.books.log("mobile_service", "on" if self.sw.value else "off", str(st.extra["api_port"]))
+        self.render()
+
+    def render(self, refresh=True):
+        from ..api import lan_addresses
+        on = bool(self.app.api and self.app.api.running)
+        self.status.content = T.chip("服務執行中（%d 個手機登入中）" % len(self.app.api.sessions) if on else "已關閉",
+                                     "green" if on else "slate", ft.Icons.WIFI_TETHERING if on else ft.Icons.WIFI_OFF)
+        cards = []
+        if on:
+            port = self.app.api.port
+            for ip in lan_addresses() or ["127.0.0.1"]:
+                url = "http://%s:%d" % (ip, port)
+                cards.append(T.card(ft.Column([
+                    ft.Image(src=qr_png(deep_link(url)), width=200, height=200),
+                    ft.Text(url, size=16, weight=ft.FontWeight.W_700, color=T.PRIMARY, selectable=True),
+                    T.muted("手機相機掃描，或在 App 輸入這個網址", 11)],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8), padding=16, width=260))
+        else:
+            cards.append(T.empty_state(ft.Icons.PHONELINK_OFF, "手機連線服務已關閉", "打開上方開關後，這裡會顯示 QR Code"))
+        self.urls.controls = cards
+        if refresh:
+            self.update()
+
+
 # ====================================================================== 操作紀錄
 ACTIONS = {"login": "登入", "logout": "登出", "login_fail": "登入失敗", "password": "變更密碼",
            "voucher_new": "新增傳票", "voucher_edit": "修改傳票", "voucher_delete": "刪除傳票",
@@ -332,7 +417,9 @@ ACTIONS = {"login": "登入", "logout": "登出", "login_fail": "登入失敗", 
            "year_reopen": "取消年度結帳", "user_save": "儲存使用者", "user_delete": "刪除使用者", "company": "公司設定",
            "account_save": "儲存科目", "account_delete": "刪除科目", "master_save": "儲存基本資料",
            "master_delete": "刪除基本資料", "template_save": "儲存常用分錄", "template_delete": "刪除常用分錄",
-           "backup": "備份", "restore": "還原", "update": "版本更新", "budget_save": "儲存預算"}
+           "backup": "備份", "restore": "還原", "update": "版本更新", "budget_save": "儲存預算",
+           "mobile_login": "手機登入", "mobile_logout": "手機登出", "mobile_service": "手機連線服務",
+           "ratio_save": "儲存比率公式", "ratio_delete": "刪除比率公式", "import": "匯入"}
 
 
 class Audit(ft.Column):

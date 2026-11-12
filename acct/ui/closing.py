@@ -1,4 +1,4 @@
-"""期末作業：期間關帳、外幣現值調整、年度結帳、預算編列、比率公式。"""
+﻿"""期末作業：期間關帳、外幣現值調整、年度結帳、預算編列、比率公式。"""
 from decimal import Decimal
 
 import flet as ft
@@ -137,7 +137,7 @@ class YearEnd(ft.Column):
             color = T.SUCCESS if ok else (T.WARN if ok is None else T.DANGER)
             rows.append(ft.Row([ft.Icon(icon, color=color), ft.Text(t, size=14, expand=True), T.muted(note, 13)]))
         self.info.controls = [
-            ft.Row([T.kpi("會計期間", "%s～%s" % (rocdate.show(s), rocdate.show(e)), ft.Icons.DATE_RANGE, "slate"),
+            T.kpis([T.kpi("會計期間", "%s～%s" % (rocdate.show(s), rocdate.show(e)), ft.Icons.DATE_RANGE, "slate"),
                     T.kpi("本年度淨利（損）", T.amt(inc["net"]), ft.Icons.TRENDING_UP,
                           "green" if inc["net"] >= 0 else "rose"),
                     T.kpi("結帳狀態", "已結帳" if closed else "未結帳",
@@ -187,11 +187,8 @@ class BudgetEdit(ft.Column):
         self.load()
 
     def load(self, refresh=True):
-        db = self.ctx.books.db
-        accts = db.rows("SELECT code, name FROM accounts WHERE level=4 AND active=1 AND LEFT(code,1) IN "
-                        "('4','5','6','7','8') ORDER BY code")
-        cur = {r["account"]: sum(Decimal(r["m%d" % m]) for m in range(1, 13))
-               for r in db.rows("SELECT * FROM budgets WHERE year=%s AND dept=%s", (self.year, self.dept.value or ""))}
+        accts = self.ctx.books.budget_sheet(self.year, self.dept.value or "")
+        cur = {a["code"]: a["total"] for a in accts if a["total"]}
         self.fields = {}
         rows = [ft.Row([T.muted("科目", 12, width=280), T.muted("全年預算", 12, width=160),
                         T.muted("每月約", 12, width=120)])]
@@ -213,27 +210,8 @@ class BudgetEdit(ft.Column):
             self.update()
 
     def save(self):
-        b = self.ctx.books
-        if not self.ctx.guard(b.need, "CLS"):
-            return
-        db, dept = b.db, self.dept.value or ""
-        try:
-            data = {k: money(f.value) for k, f in self.fields.items()}
-        except Exception as e:
-            self.ctx.toast(str(e), True)
-            return
-        with db.transaction():
-            db.exec("DELETE FROM budgets WHERE year=%s AND dept=%s", (self.year, dept))
-            for code, total in data.items():
-                if not total:
-                    continue
-                m = (total / 12).quantize(Decimal("1"))
-                months = [m] * 11 + [total - m * 11]
-                db.exec("INSERT INTO budgets (year, account, dept, %s) VALUES (%%s, %%s, %%s, %s)" % (
-                    ", ".join("m%d" % i for i in range(1, 13)), ", ".join(["%s"] * 12)),
-                    [self.year, code, dept] + months)
-        b.log("budget_save", self.year, dept)
-        self.ctx.toast("預算已儲存")
+        data = {k: (f.value or "0") for k, f in self.fields.items()}
+        self.ctx.guard(self.ctx.books.save_budget, self.year, self.dept.value or "", data, ok="預算已儲存")
 
 
 # ====================================================================== 比率公式
@@ -248,7 +226,7 @@ class RatioSetup(ft.Column):
         self.load(refresh=False)
 
     def load(self, refresh=True):
-        rows = self.ctx.books.db.rows("SELECT * FROM ratios ORDER BY sort, id")
+        rows = self.ctx.books.ratio_rows()
         self.list.controls = [ft.Container(ft.Row([
             T.icon_tile(ft.Icons.FUNCTIONS, "orange", 36),
             ft.Column([ft.Text("%s（%s）" % (r["name"], r["unit"]), size=14, weight=ft.FontWeight.W_700),
@@ -270,33 +248,16 @@ class RatioSetup(ft.Column):
         memo = T.field("說明", r["memo"])
 
         def save(e):
-            from ..reports import evaluate
-            try:
-                evaluate(formula.value, lambda p: Decimal(1), lambda p: Decimal(1), Decimal(1), Decimal(1))
-            except ZeroDivisionError:
-                pass
-            except Exception as ex:
-                c.toast("公式錯誤：%s" % ex, True)
-                return
-            if not c.guard(c.books.need, "CLS"):
-                return
-            db = c.books.db
-            if r["id"]:
-                db.exec("UPDATE ratios SET name=%s, formula=%s, unit=%s, memo=%s WHERE id=%s",
-                        (name.value, formula.value, unit.value, memo.value, r["id"]))
-            else:
-                db.exec("INSERT INTO ratios (name, formula, unit, memo, sort) VALUES (%s, %s, %s, %s, 99)",
-                        (name.value, formula.value, unit.value, memo.value))
-            c.close()
-            c.toast("已儲存")
-            self.load()
+            if c.guard(c.books.save_ratio, r["id"], name.value, formula.value, unit.value, memo.value,
+                       ok="已儲存"):
+                c.close()
+                self.load()
         c.dialog("財務比率", ft.Column([name, formula, ft.Row([unit]), memo], tight=True, spacing=12),
                  [T.btn("取消", kind="ghost", on_click=lambda e: c.close()), T.btn("儲存", ft.Icons.SAVE, save)],
                  icon=ft.Icons.FUNCTIONS, tone="orange")
 
     def delete(self, r):
         def go():
-            if self.ctx.guard(self.ctx.books.need, "CLS"):
-                self.ctx.books.db.exec("DELETE FROM ratios WHERE id=%s", (r["id"],))
+            if self.ctx.guard(self.ctx.books.delete_ratio, r["id"]):
                 self.load()
         self.ctx.confirm("刪除比率", "確定刪除「%s」？" % r["name"], go, yes="刪除")

@@ -27,7 +27,7 @@ def resource_dir() -> str:
 
 
 def data_dir() -> str:
-    env = os.environ.get("ACCT_DATA_DIR")
+    env = os.environ.get("ACCT_DATA_DIR") or os.environ.get("FLET_APP_STORAGE_DATA")   # 後者＝手機 App 的資料夾
     if env:
         os.makedirs(env, exist_ok=True)
         return env

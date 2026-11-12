@@ -70,10 +70,19 @@ class Speaker:
         self.proc = None
         self.mci = _Mci() if os.name == "nt" else None
         self.token = 0
+        # 手機版：由 mobile.py 接上 flet_audio 播放器與「向電腦要語音」的函式
+        self.ext_play = None        # (mp3 bytes) -> None
+        self.ext_stop = None
+        self.ext_playing = None
+        self.remote_tts = None      # (text) -> mp3 bytes
 
     # ---------------------------------------------------------- 播放
     def play_file(self, path):
         self.stop()
+        if self.ext_play:
+            with open(path, "rb") as f:
+                self.ext_play(f.read())
+            return
         if self.mci:
             with self.lock:
                 self.mci.play(path)
@@ -81,12 +90,19 @@ class Speaker:
             self.proc = subprocess.Popen(["afplay", path])
 
     def playing(self):
+        if self.ext_playing:
+            return self.ext_playing()
         if self.mci and self.mci.playing():
             return True
         return bool(self.proc and self.proc.poll() is None)
 
     def stop(self):
         self.token += 1
+        if self.ext_stop:
+            try:
+                self.ext_stop()
+            except Exception:
+                pass
         if self.mci:
             with self.lock:
                 self.mci.stop()
@@ -112,6 +128,14 @@ class Speaker:
         threading.Thread(target=self._say, args=(text, token), daemon=True).start()
 
     def _say(self, text, token):
+        if self.remote_tts:                     # 手機：請電腦產生語音
+            try:
+                data = self.remote_tts(text)
+            except Exception:
+                return
+            if token == self.token and self.ext_play:
+                self.ext_play(data)
+            return
         mp3 = self._neural(text)
         if token != self.token:
             return

@@ -49,10 +49,27 @@ class LineRow(ft.Container):
                                   on_click=lambda e: self.extra_dialog())
         self.remove = ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_size=18, icon_color="#E06666", tooltip="刪除這一行",
                                     on_click=lambda e: entry.remove_line(self))
-        super().__init__(ft.Row([self.no, self.account, ft.Row([self.summary, self.phrase], spacing=4, width=230),
-                                 self.debit, self.credit, self.dept, self.partner, self.more, self.remove], spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                         padding=ft.Padding.symmetric(vertical=4, horizontal=6), border_radius=10)
+        if T.MOBILE:
+            # 手機：每一行明細是一張小卡片
+            # 寬度一律按比例（手機字體放大時也不會超出卡片）
+            for c in (self.account, self.summary, self.debit, self.credit, self.dept, self.partner):
+                c.width = None
+                c.expand = True
+            self.debit.label, self.credit.label = "借方", "貸方"
+            self.partner_row = ft.Row([self.partner])
+            layout = ft.Column([
+                ft.Row([self.no, self.account], spacing=6),
+                ft.Row([self.summary, self.phrase], spacing=4),
+                ft.Row([self.debit, self.credit], spacing=8),
+                ft.Row([self.dept, self.more, self.remove], spacing=4),
+                self.partner_row], spacing=8)
+            super().__init__(layout, padding=12, border_radius=14, border=ft.Border.all(1, T.LINE),
+                             bgcolor=T.CARD, data=T.READY)
+        else:
+            super().__init__(ft.Row([self.no, self.account, ft.Row([self.summary, self.phrase], spacing=4, width=230),
+                                     self.debit, self.credit, self.dept, self.partner, self.more, self.remove],
+                                    spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                             padding=ft.Padding.symmetric(vertical=4, horizontal=6), border_radius=10)
         self.refresh_partner(data.get("partner"))
         self.mark_extra()
 
@@ -75,6 +92,8 @@ class LineRow(ft.Container):
         kind = a["partner_kind"] if a else ""
         self.partner.options = [ft.DropdownOption(key=k, text=t) for k, t in self.entry.partner_opts(kind)]
         self.partner.visible = bool(kind)
+        if getattr(self, "partner_row", None) is not None:
+            self.partner_row.visible = bool(kind)
         self.partner.hint_text = {"C": "選擇客戶", "V": "選擇廠商", "E": "選擇員工"}.get(kind, "")
         if not kind:
             self.partner.value = None
@@ -216,6 +235,7 @@ class VoucherEntry(ft.Column):
               for t, w in (("會計科目", 250), ("摘要", 230), ("借方金額", 130), ("貸方金額", 130), ("部門", 130),
                            ("往來對象", 190))]], spacing=8),
             bgcolor="#EEF3FA", border_radius=10, padding=ft.Padding.symmetric(vertical=8, horizontal=6))
+        header_row.visible = not T.MOBILE
         body = T.card(ft.Column([header_row, self.lines,
                                  ft.Row([T.btn("新增一行", ft.Icons.ADD, lambda e: self.add_line(True), kind="ghost"),
                                          T.muted("提示：在金額欄按 Enter 會自動新增下一行，摘要自動沿用上一行，金額自動帶入差額",
@@ -224,6 +244,27 @@ class VoucherEntry(ft.Column):
             total_box("借方合計", self.tot_d, "blue"), total_box("貸方合計", self.tot_c, "teal"), self.diff,
             ft.Container(expand=True), self.del_btn, self.save_btn, self.save_new_btn], spacing=16,
             vertical_alignment=ft.CrossAxisAlignment.CENTER), padding=14)
+        if T.MOBILE:
+            # 手機：類別一排可換行、欄位一行一個、合計與按鈕上下排列
+            self.type_row.wrap, self.type_row.run_spacing = True, 8
+            self.date.width = self.attach.width = None
+            self.date.expand, self.attach.expand = 3, 2
+            self.memo.expand = False
+            head = T.card(ft.Column([
+                self.type_row,
+                ft.Row([T.btn("常用分錄", ft.Icons.BOOKMARKS, lambda e: self.template_dialog(), kind="outline"),
+                        T.btn("新傳票", ft.Icons.NOTE_ADD, lambda e: self.reset(), kind="ghost")], wrap=True),
+                ft.Row([self.date, self.attach], spacing=10),
+                ft.Row([T.muted("傳票號碼", 12), self.no, self.state], spacing=10),
+                self.memo], spacing=12, data=T.READY), padding=14)
+            for b_ in (self.save_btn, self.save_new_btn, self.del_btn):
+                b_.expand = True
+            foot = T.card(ft.Column([
+                ft.Row([ft.Container(total_box("借方合計", self.tot_d, "blue"), expand=True),
+                        ft.Container(total_box("貸方合計", self.tot_c, "teal"), expand=True)], spacing=10),
+                self.diff,
+                ft.Row([self.del_btn, self.save_btn], spacing=10), ft.Row([self.save_new_btn])],
+                spacing=10, data=T.READY), padding=14)
         super().__init__([self.lock_banner, head, body, foot], spacing=12, expand=True)
         if vid:
             self.load(b.voucher(vid))
@@ -401,16 +442,13 @@ class VoucherEntry(ft.Column):
             return
 
         async def template(e):
-            path = await c.save_as("傳票明細範本.csv", "csv")
-            if path:
-                csvio.voucher_template(path)
-                T.open_file(path)
+            await c.save_generated("傳票明細範本.csv", csvio.voucher_template)
 
         async def pick(e):
-            files = await ft.FilePicker().pick_files(dialog_title="選擇傳票明細（CSV）", allowed_extensions=["csv"])
-            if not files:
+            path = await c.pick_csv("選擇傳票明細（CSV）")
+            if not path:
                 return
-            lines = c.guard(csvio.read_voucher_lines, files[0].path)
+            lines = c.guard(csvio.read_voucher_lines, path)
             if not lines:
                 return
             unknown = [ln["account"] for ln in lines if ln["account"] not in self.acct_map]
@@ -520,7 +558,8 @@ class VoucherList(ft.Row):
                            T.btn("查詢", ft.Icons.SEARCH, lambda e: self.search())], wrap=True, spacing=10),
                    padding=14),
             self.grid], expand=True, spacing=12)
-        super().__init__([left, T.card(self.detail, padding=16)], expand=True, spacing=14,
+        side = [] if T.MOBILE else [T.card(self.detail, padding=16)]     # 手機：明細改用彈出視窗
+        super().__init__([left] + side, expand=True, spacing=14, data="split",
                          vertical_alignment=ft.CrossAxisAlignment.START)
         self.search(refresh=False)
         if focus:
@@ -591,6 +630,13 @@ class VoucherList(ft.Row):
                     ft.Text(T.amt(v["total"]), width=95, text_align=ft.TextAlign.RIGHT, weight=ft.FontWeight.W_700)]),
             T.muted(meta, 11),
             ft.Row(acts, wrap=True, spacing=8, run_spacing=8)], spacing=8)
+        if T.MOBILE:
+            content, self.detail.content = self.detail.content, None
+            lines.height = 240
+            if refresh:
+                c.dialog("傳票明細", content, [T.btn("關閉", kind="ghost", on_click=lambda e: c.close())],
+                         icon=ft.Icons.RECEIPT_LONG, tone=T.VTYPE_TONE.get(v["v_type"], "slate"))
+            return
         if refresh:
             self.update()
 
@@ -609,6 +655,13 @@ class VoucherList(ft.Row):
             self.after(v)
 
     def after(self, v=None):
+        if T.MOBILE:
+            try:
+                self.ctx.close()
+            except Exception:
+                pass
+            self.search()
+            return
         self.search(refresh=False)
         if v and self.ctx.books.voucher(v["id"]):
             self.pick(v, refresh=False)
@@ -632,7 +685,7 @@ class Review(ft.Column):
     def __init__(self, ctx):
         self.ctx = ctx
         self.tab = 0
-        self.tabs = ft.Row(spacing=10)
+        self.tabs = ft.Row(spacing=10, wrap=True, run_spacing=8)
         self.grid = Grid_for_vouchers(selectable=True)
         self.actions = ft.Row(spacing=10)
         today = rocdate.today()
@@ -641,7 +694,8 @@ class Review(ft.Column):
         super().__init__([
             T.page_header(ft.Icons.FACT_CHECK, "傳票審核過帳", "勾選傳票後執行；製單與審核分離可在公司設定調整", "amber"),
             T.card(ft.Row([self.tabs, ft.Container(expand=True), self.start, self.end,
-                           T.btn("重新整理", ft.Icons.REFRESH, lambda e: self.load(), kind="outline")]), padding=12),
+                           T.btn("重新整理", ft.Icons.REFRESH, lambda e: self.load(), kind="outline")],
+                          data="split"), padding=12),
             self.grid, T.card(self.actions, padding=12)], spacing=12, expand=True)
         self.load(refresh=False)
 

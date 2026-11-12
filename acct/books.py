@@ -710,6 +710,60 @@ class Books:
                 self.db.exec("DELETE FROM vouchers WHERE id=%s", (vid,))
         self.log("year_reopen", year)
 
+    # ================================================================ 預算
+    def budget_sheet(self, year, dept=""):
+        """損益明細科目與該年度（部門）全年預算：[{code, name, total}]"""
+        self.need("CLS", 1)
+        accts = self.db.rows("SELECT code, name FROM accounts WHERE level=4 AND active=1 AND LEFT(code,1) IN "
+                             "('4','5','6','7','8') ORDER BY code")
+        cur = {r["account"]: sum(Decimal(r["m%d" % m]) for m in range(1, 13))
+               for r in self.db.rows("SELECT * FROM budgets WHERE year=%s AND dept=%s", (int(year), dept or ""))}
+        return [dict(a, total=cur.get(a["code"], Decimal(0))) for a in accts]
+
+    def save_budget(self, year, dept, totals: dict):
+        """totals={科目: 全年金額}，平均分配到 12 個月（尾差放 12 月）。"""
+        self.need("CLS")
+        data = {k: money(v) for k, v in totals.items()}
+        with self.db.transaction():
+            self.db.exec("DELETE FROM budgets WHERE year=%s AND dept=%s", (int(year), dept or ""))
+            for code, total in data.items():
+                if not total:
+                    continue
+                m = (total / 12).quantize(Decimal("1"))
+                months = [m] * 11 + [total - m * 11]
+                self.db.exec("INSERT INTO budgets (year, account, dept, %s) VALUES (%%s, %%s, %%s, %s)" % (
+                    ", ".join("m%d" % i for i in range(1, 13)), ", ".join(["%s"] * 12)),
+                    [int(year), code, dept or ""] + months)
+        self.log("budget_save", year, dept)
+
+    # ================================================================ 財務比率公式
+    def ratio_rows(self):
+        return self.db.rows("SELECT * FROM ratios ORDER BY sort, id")
+
+    def save_ratio(self, rid, name, formula, unit, memo):
+        self.need("CLS")
+        from .reports import evaluate
+        if not (name or "").strip() or not (formula or "").strip():
+            raise BizError("比率名稱與公式必填")
+        try:
+            evaluate(formula, lambda p: Decimal(1), lambda p: Decimal(1), Decimal(1), Decimal(1))
+        except ZeroDivisionError:
+            pass
+        except Exception as e:
+            raise BizError("公式錯誤：%s" % e)
+        if rid:
+            self.db.exec("UPDATE ratios SET name=%s, formula=%s, unit=%s, memo=%s WHERE id=%s",
+                         (name.strip(), formula.strip(), unit, memo or "", rid))
+        else:
+            self.db.exec("INSERT INTO ratios (name, formula, unit, memo, sort) VALUES (%s, %s, %s, %s, 99)",
+                         (name.strip(), formula.strip(), unit, memo or ""))
+        self.log("ratio_save", rid or "", name)
+
+    def delete_ratio(self, rid):
+        self.need("CLS")
+        self.db.exec("DELETE FROM ratios WHERE id=%s", (rid,))
+        self.log("ratio_delete", rid)
+
     # ================================================================ 外幣現值調整
     def revaluation_preview(self, as_of):
         """外幣科目：外幣餘額 × 最新匯率 與 帳面金額的差額。"""

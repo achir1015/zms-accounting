@@ -87,7 +87,7 @@ class Income(ReportBase):
         self.grid = T.Grid(cols, row_style=bold_rows)
         self.grid.set_rows(rows)
         net = r["net"]
-        kpis = ft.Row([T.kpi("營業收入", T.amt(r["revenue"]), ft.Icons.STOREFRONT, "blue"),
+        kpis = T.kpis([T.kpi("營業收入", T.amt(r["revenue"]), ft.Icons.STOREFRONT, "blue"),
                        T.kpi("營業毛利", T.amt(r["gross"]), ft.Icons.SAVINGS, "teal"),
                        T.kpi("營業淨利", T.amt(r["operating"]), ft.Icons.WORK_OUTLINE, "amber"),
                        T.kpi("本期淨利", T.amt(net), ft.Icons.EMOJI_EVENTS, "green" if net >= 0 else "rose")],
@@ -151,6 +151,11 @@ class BalanceSheet(ReportBase):
         check = T.chip("資產 %s ＝ 負債 %s ＋ 權益 %s" % (T.amt(bs["assets"]), T.amt(bs["liabilities"]),
                                                    T.amt(bs["equity"])) if ok else "不平衡，請檢查開帳與傳票",
                        "green" if ok else "rose", ft.Icons.CHECK_CIRCLE if ok else ft.Icons.ERROR_OUTLINE, 13)
+        if T.MOBILE:
+            self.result.content = ft.Column([check, T.card(p["1"], padding=14),
+                                             T.card(ft.Column([p["2"], ft.Container(height=8), p["3"]]), padding=14)],
+                                            spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
+            return
         self.result.content = ft.Column([check, ft.Row([
             T.card(ft.Column([p["1"]], scroll=ft.ScrollMode.AUTO), expand=True),
             T.card(ft.Column([p["2"], ft.Container(height=8), p["3"]], scroll=ft.ScrollMode.AUTO), expand=True)],
@@ -189,7 +194,7 @@ class CashFlow(ReportBase):
                  dict(name="期末現金及約當現金", amount=cf["closing"], _cls="total")]
         self.grid = T.Grid([("name", "項　　目", "s", 340), ("amount", "金額", "n", 150)], row_style=bold_rows)
         self.grid.set_rows(flat)
-        self.result.content = ft.Column([ft.Row(cards + [T.kpi("期末現金", T.amt(cf["closing"]),
+        self.result.content = ft.Column([T.kpis(cards + [T.kpi("期末現金", T.amt(cf["closing"]),
                                                                ft.Icons.ACCOUNT_BALANCE_WALLET, "green",
                                                                sub="期初 %s" % T.amt(cf["opening"]))], spacing=12),
                                          self.grid], spacing=12, expand=True)

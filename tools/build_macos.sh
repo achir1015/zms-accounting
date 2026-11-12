@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # 建置 macOS 版：dist-mac/資料助秘之一般公司會計.app 與 dist-mac/ZMSAccounting-<版本>-mac.dmg
 # 用法（在 Mac 上）：bash tools/build_macos.sh
 set -euo pipefail
@@ -26,7 +26,7 @@ iconutil -c icns "$SET" -o build-mac/icon.icns
 echo "== flet pack"
 .venv/bin/flet pack main.py -y -n ZMSAccounting -i build-mac/icon.icns --distpath dist-mac \
   --add-data assets:assets --add-data acct/schema.sql:acct \
-  --hidden-import edge_tts --hidden-import pymysql \
+  --hidden-import edge_tts --hidden-import pymysql --hidden-import qrcode --hidden-import qrcode.image.pil \
   --product-name "$NAME" --product-version "$VER" --bundle-id "$BUNDLE_ID" --copyright "© 2026 吳玉柱"
 
 APP=dist-mac/ZMSAccounting.app

@@ -1,4 +1,4 @@
-"""帳簿查詢：日記簿、明細分類帳、總分類帳、現金簿、往來明細。"""
+﻿"""帳簿查詢：日記簿、明細分類帳、總分類帳、現金簿、往來明細。"""
 from decimal import Decimal
 
 import flet as ft
@@ -149,7 +149,7 @@ class Ledger(ReportBase):
         self.grid = T.Grid(cols, row_style=bold_rows)
         self.grid.set_rows(rows)
         a = self.ctx.books.account(code)
-        kpis = ft.Row([T.kpi("期初餘額", T.amt(led["opening"]), ft.Icons.FLAG, "slate"),
+        kpis = T.kpis([T.kpi("期初餘額", T.amt(led["opening"]), ft.Icons.FLAG, "slate"),
                        T.kpi("本期借方", T.amt(led["debit"]), ft.Icons.ARROW_DOWNWARD, "blue"),
                        T.kpi("本期貸方", T.amt(led["credit"]), ft.Icons.ARROW_UPWARD, "teal"),
                        T.kpi("期末餘額", T.amt(led["closing"]), ft.Icons.ACCOUNT_BALANCE_WALLET, "amber",
@@ -201,7 +201,7 @@ class CashBook(ReportBase):
                             ("other", "對方科目", "s", 170), ("income", "收入", "nz", 110), ("expense", "支出", "nz", 110),
                             ("balance", "餘額", "n", 120)], row_style=bold_rows)
         self.grid.set_rows(rows)
-        self.result.content = ft.Column([ft.Row(cards[:4], spacing=12), self.grid], spacing=12, expand=True)
+        self.result.content = ft.Column([T.kpis(cards[:4], spacing=12), self.grid], spacing=12, expand=True)
 
 
 class PartnerLedger(ReportBase):

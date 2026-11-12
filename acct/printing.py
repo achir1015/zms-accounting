@@ -56,7 +56,13 @@ def table(columns, rows, row_class=None):
     return h + "</table>"
 
 
+mobile_saver = None     # 手機版：(檔名, bytes) → 另存到手機（由 mobile.py 設定）
+
+
 def write_and_open(html_text, name):
+    if mobile_saver:
+        mobile_saver("%s_%s.html" % (name, time.strftime("%Y%m%d%H%M")), html_text.encode("utf-8"))
+        return ""
     d = os.path.join(tempfile.gettempdir(), "ZMSAccounting")
     os.makedirs(d, exist_ok=True)
     path = os.path.join(d, "%s_%s.html" % (name, time.strftime("%Y%m%d%H%M%S")))

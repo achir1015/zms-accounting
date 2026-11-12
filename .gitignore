@@ -12,3 +12,8 @@ packaging/mariadb/
 packaging/mariadb-mac/
 dist-mac/
 build-mac/
+data_mobile/
+
+android/
+dist-android/
+

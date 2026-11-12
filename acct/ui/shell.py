@@ -64,6 +64,7 @@ def menu():
         ("系統管理", I.ADMIN_PANEL_SETTINGS, "rose", [
             ("users", "使用者與權限", I.ADMIN_PANEL_SETTINGS, "SYS", 2),
             ("company", "公司設定", I.BUSINESS, "SYS", 2),
+            ("mobile_link", "手機連線", I.PHONE_ANDROID, "SYS", 2),
             ("backup", "備份與還原", I.BACKUP, "SYS", 2),
             ("update", "版本更新與捷徑", I.SYSTEM_UPDATE, "", 0),
             ("audit", "操作紀錄", I.HISTORY, "SYS", 1)]),
@@ -83,6 +84,7 @@ def build_screen(sid, ctx, **kw):
         "templates": masters.Templates, "periods": closing.Periods, "revaluation": closing.Revaluation,
         "year_end": closing.YearEnd, "budget_edit": closing.BudgetEdit, "ratio_setup": closing.RatioSetup,
         "users": admin.Users, "company": admin.Company, "backup": admin.Backup, "update": admin.Update,
+        "mobile_link": admin.MobileLink,
         "audit": admin.Audit, "help": helpview.Help,
     }
     if sid in table:
@@ -102,6 +104,10 @@ class App:
         self.current = "home"
         self.expanded = {"總覽", "傳票作業"}
         self.update_info = None
+        self.mobile = False
+        self.api = None              # 電腦版：手機連線服務
+        self.client = None           # 手機版：連到電腦的用戶端
+        self.server_info = None
 
     # ================================================================ 啟動
     def start(self):
@@ -113,6 +119,11 @@ class App:
         p.bgcolor = T.BG
         p.padding = 0
         p.spacing = 0
+        from . import mobile
+        if mobile.is_mobile(p):
+            self.mobile = True
+            mobile.start(self)
+            return
         try:
             p.window.width, p.window.height = 1440, 900
             p.window.min_width, p.window.min_height = 1180, 700
@@ -163,6 +174,11 @@ class App:
             self.books = Books(self.db)
             self.reports = Reports(self.books)
             self.ctx = T.Ctx(self)
+            if self.st.extra.get("api_enabled"):
+                try:
+                    self.start_api()
+                except Exception:
+                    log.exception("api autostart")
             self.login()
         except Exception as e:
             log.exception("boot")
@@ -260,9 +276,15 @@ class App:
 
     def main(self):
         p = self.page
-        self.groups = [(g, ic, tone, [it for it in items if self.allowed(it[3], it[4])])
+        from . import mobile
+        hide = mobile.DESKTOP_ONLY if self.mobile else set()
+        self.groups = [(g, ic, tone, [it for it in items if self.allowed(it[3], it[4]) and it[0] not in hide])
                        for g, ic, tone, items in menu()]
         self.groups = [g for g in self.groups if g[3]]
+        if self.mobile:
+            self.expanded = set()
+            mobile.main(self)
+            return
         self.sidebar = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
         u = self.books.user
         avatar = ft.Container(ft.Text(u["name"][:1], color=ft.Colors.WHITE, weight=ft.FontWeight.W_700),
@@ -361,8 +383,20 @@ class App:
                                ft.Icon(ft.Icons.CHEVRON_RIGHT, size=16, color=T.MUTED),
                                ft.Text(it[1], size=15, weight=ft.FontWeight.W_700, color=T.TEXT)]
         self.render_sidebar()
+        if self.mobile:
+            from . import mobile
+            self.title.value = it[1]
+            self.page.run_task(mobile.close_drawer, self.page)
+            try:
+                self.page.pop_dialog()           # 從彈出視窗按「修改／開啟」時先關閉視窗
+            except Exception:
+                pass
         try:
-            self.body.content = build_screen(sid, self.ctx, **kw)
+            content = build_screen(sid, self.ctx, **kw)
+            if self.mobile:
+                T.mobilize(content)
+                content = ft.Column([content], scroll=ft.ScrollMode.AUTO, expand=True)
+            self.body.content = content
         except Exception as e:
             log.exception("screen %s", sid)
             self.body.content = T.empty_state(ft.Icons.ERROR_OUTLINE, "畫面載入失敗", str(e))
@@ -420,6 +454,11 @@ class App:
         speaker.stop()
         self.books.logout()
         self.current = "home"
+        if self.mobile:
+            from . import mobile
+            self.page.drawer = None
+            mobile.login(self)
+            return
         self.login()
 
     # ================================================================ 資料庫設定
@@ -482,8 +521,25 @@ class App:
             self.shutdown()
             await self.page.window.destroy()
 
+    # ================================================================ 手機連線服務（電腦版）
+    def start_api(self):
+        from ..api import ApiServer
+        if self.api and self.api.running:
+            return
+        self.api = ApiServer(self.db, port=int(self.st.extra.get("api_port") or 8765))
+        self.api.start()
+
+    def stop_api(self):
+        if self.api:
+            self.api.stop()
+            self.api = None
+
     def shutdown(self):
         speaker.stop()
+        try:
+            self.stop_api()
+        except Exception:
+            pass
         try:
             if self.books and self.books.user:
                 self.books.logout()

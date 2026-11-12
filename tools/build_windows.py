@@ -1,4 +1,4 @@
-"""一鍵建置 Windows 安裝檔：
+﻿"""一鍵建置 Windows 安裝檔：
 1. 準備內附的 MariaDB 最小檔案（packaging/mariadb）
 2. 產生圖示、語音說明（已存在則略過）
 3. flet pack（PyInstaller）打包到 dist/ZMSAccounting
@@ -54,7 +54,8 @@ def pack():
     shutil.rmtree(os.path.join(HERE, "dist"), ignore_errors=True)
     cmd = [flet, "pack", "main.py", "-D", "-y", "-n", APP_ID, "-i", "packaging/icon.ico", "--distpath", "dist",
            "--add-data", "assets:assets", "--add-data", "acct/schema.sql:acct",
-           "--hidden-import", "edge_tts", "--hidden-import", "pymysql",
+           "--hidden-import", "edge_tts", "--hidden-import", "pymysql", "--hidden-import", "qrcode",
+           "--hidden-import", "qrcode.image.pil",
            "--product-name", APP_NAME, "--file-description", APP_NAME, "--product-version", APP_VERSION,
            "--file-version", APP_VERSION + ".0", "--company-name", AUTHOR, "--copyright", "© 2026 " + AUTHOR]
     subprocess.run(cmd, cwd=HERE, check=True, env=dict(os.environ, PYTHONIOENCODING="utf-8"))

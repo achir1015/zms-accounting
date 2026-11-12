@@ -33,7 +33,7 @@ class Dashboard(ft.Column):
                                        colors=[T.PRIMARY_DARK, T.PRIMARY, "#178A8F"]),
             shadow=ft.BoxShadow(blur_radius=24, spread_radius=-8, color="#551E4D8C", offset=ft.Offset(0, 10)))
 
-        kpis = ft.Row([
+        kpis = T.kpis([
             T.kpi("現金及銀行存款", T.amt(d["cash"]), ft.Icons.ACCOUNT_BALANCE_WALLET, "teal",
                   on_click=lambda e: app.go("cash_book")),
             T.kpi("應收款項", T.amt(d["receivable"]), ft.Icons.CALL_RECEIVED, "sky",
@@ -42,7 +42,7 @@ class Dashboard(ft.Column):
                   on_click=lambda e: app.go("partner_ledger")),
             T.kpi("本月損益", T.amt(net), ft.Icons.TRENDING_UP if net >= 0 else ft.Icons.TRENDING_DOWN,
                   "green" if net >= 0 else "rose", sub="本月收入 %s" % T.amt(d["month_revenue"]),
-                  on_click=lambda e: app.go("income"))], spacing=16)
+                  on_click=lambda e: app.go("income"))])
 
         quick = [("收入傳票", ft.Icons.ADD_CARD, "green", lambda e: app.go("voucher_entry", v_type="收")),
                  ("支出傳票", ft.Icons.REQUEST_QUOTE, "rose", lambda e: app.go("voucher_entry", v_type="支")),
@@ -73,7 +73,7 @@ class Dashboard(ft.Column):
         super().__init__([
             hero, kpis,
             ft.Row([ft.Text("快捷功能", size=17, weight=ft.FontWeight.W_700, color=T.TEXT)]), quick_tiles,
-            ft.Row([chart, todo], spacing=16, vertical_alignment=ft.CrossAxisAlignment.START)],
+            T.split(chart, todo, spacing=16)],
             spacing=18, scroll=ft.ScrollMode.AUTO, expand=True)
 
 

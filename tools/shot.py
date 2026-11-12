@@ -9,7 +9,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 import os
-URL = "http://127.0.0.1:8560/" + os.environ.get("SHOT_PATH", "")
+URL = os.environ.get("SHOT_BASE", "http://127.0.0.1:8560/") + os.environ.get("SHOT_PATH", "")
 
 
 def snap(pg, path):
@@ -26,7 +26,7 @@ def main():
     steps = sys.argv[2:]
     with sync_playwright() as p:
         b = p.chromium.launch(channel="msedge", headless=True)
-        pg = b.new_page(viewport={"width": 1440, "height": 900})
+        pg = b.new_page(viewport={"width": int(os.environ.get("SHOT_W", 1440)), "height": int(os.environ.get("SHOT_H", 900))})
         pg.goto(URL)
         time.sleep(9)
         n = 0

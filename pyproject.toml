@@ -1,0 +1,34 @@
+[project]
+name = "zms-accounting"
+version = "1.3.0"
+description = "資料助秘之一般公司會計"
+authors = [{ name = "吳玉柱" }]
+requires-python = ">=3.10"
+dependencies = ["flet==1.1.2", "flet-audio==1.1.2", "pymysql>=1.1"]
+
+[tool.flet]
+org = "com.achir"
+product = "資料助秘之一般公司會計"
+company = "吳玉柱"
+copyright = "© 2026 吳玉柱"
+
+[tool.flet.app]
+path = "."
+exclude = ["tests", "tools", "packaging", "data", "data_mobile", ".venv", "dist", "dist-installer", "dist-mac",
+           "dist-android", "build", "build-mac", "android", "docs", "run_web.py", "run_web_mobile.py", "*.spec",
+           "assets/icon.ico", "build-mac.log"]
+
+[tool.flet.deep_linking]
+scheme = "zmsacct"
+host = "connect"
+
+[tool.flet.android]
+permissions = { "android.permission.INTERNET" = true }
+
+[tool.flet.ios]
+bundle_id = "com.achir.zmsaccounting"
+team_id = "7BN6XJ59KP"
+
+[tool.flet.ios.info]
+NSLocalNetworkUsageDescription = "連到公司電腦上的會計系統"
+ITSAppUsesNonExemptEncryption = false

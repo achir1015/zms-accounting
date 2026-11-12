@@ -1,4 +1,4 @@
-"""基本資料：會計科目、常用分錄、通用基本資料（部門、員工、客戶、廠商、專案、幣別、摘要片語）。"""
+﻿"""基本資料：會計科目、常用分錄、通用基本資料（部門、員工、客戶、廠商、專案、幣別、摘要片語）。"""
 from decimal import Decimal
 
 import flet as ft
@@ -52,7 +52,7 @@ class MasterList(ft.Row):
         left = ft.Column([
             T.page_header(icon, self.m["title"], "可用 Excel 整理後匯入", tone, tools),
             self.grid], expand=True, spacing=12)
-        super().__init__([left, T.card(self.form, width=400, padding=18)], expand=True, spacing=14,
+        super().__init__([left, T.card(self.form, width=400, padding=18)], expand=True, spacing=14, data="split",
                          vertical_alignment=ft.CrossAxisAlignment.START)
         self.reload()
         self.edit(None, refresh=False)
@@ -77,19 +77,14 @@ class MasterList(ft.Row):
 
     async def template(self, e):
         from .. import csvio
-        path = await self.ctx.save_as("%s範本.csv" % self.m["title"], "csv")
-        if path:
-            csvio.master_template(self.name, path)
-            self.ctx.toast("已存範本：用 Excel 開啟填寫後存檔，再按「選擇檔案匯入」")
-            T.open_file(path)
+        await self.ctx.save_generated("%s範本.csv" % self.m["title"], lambda p: csvio.master_template(self.name, p))
 
     async def do_import(self, e):
         from .. import csvio
-        files = await ft.FilePicker().pick_files(dialog_title="選擇%s名冊（CSV）" % self.m["title"],
-                                                 allowed_extensions=["csv"])
-        if not files:
+        path = await self.ctx.pick_csv("選擇%s名冊（CSV）" % self.m["title"])
+        if not path:
             return
-        r = self.ctx.guard(csvio.import_masters, self.ctx.books, self.name, files[0].path)
+        r = self.ctx.guard(csvio.import_masters, self.ctx.books, self.name, path)
         if not r:
             return
         ok, errs = r
@@ -169,7 +164,7 @@ class Accounts(ft.Row):
             T.page_header(ft.Icons.ACCOUNT_TREE, "會計科目", "四碼制：1 大類 → 2 中類 → 3 小類 → 4 明細（可記帳）",
                           "sky", [self.search, ctx.export_button(self.grid, "會計科目表")]),
             self.cats, self.grid], expand=True, spacing=10)
-        super().__init__([left, T.card(self.form, width=420, padding=18)], expand=True, spacing=14,
+        super().__init__([left, T.card(self.form, width=420, padding=18)], expand=True, spacing=14, data="split",
                          vertical_alignment=ft.CrossAxisAlignment.START)
         self.reload()
         self.edit(None, refresh=False)
@@ -284,7 +279,7 @@ class Templates(ft.Row):
         super().__init__([
             ft.Column([T.page_header(ft.Icons.BOOKMARKS, "常用分錄", "經常發生的交易，一鍵套用", "sky"),
                        T.card(self.list, expand=True, padding=12)], width=420, spacing=12),
-            T.card(self.editor, expand=True, padding=18)], expand=True, spacing=14,
+            T.card(self.editor, expand=True, padding=18)], expand=True, spacing=14, data="split",
             vertical_alignment=ft.CrossAxisAlignment.START)
         self.reload()
         self.edit(None, refresh=False)
