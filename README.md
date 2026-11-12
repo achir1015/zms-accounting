@@ -6,7 +6,16 @@
 單一公司使用的總帳會計系統：基本資料 → 傳票登錄 → 審核過帳 → 日記簿／分類帳 → 財務報表 → 關帳與年度結帳。
 資料庫使用 **MariaDB**（安裝版內附，程式開啟自動啟動、關閉自動停止）。
 
-平台規劃：**Windows 11（v1.0.0 已完成）** → macOS → Android → iPhone → iPad。
+平台規劃：**Windows 11（v1.0.0 起）**、**macOS（v1.2.0 起）** → Android → iPhone → iPad。
+
+下載：[最新版 Releases](https://github.com/achir1015/zms-accounting/releases/latest)
+
+## 安裝（macOS 11 以上，Intel 與 Apple 晶片皆可）
+1. 下載 `ZMSAccounting-<版本>-mac.dmg`，開啟後把「資料助秘之一般公司會計」拖到「應用程式」。
+2. 第一次開啟：在「應用程式」對 App 按右鍵 → 「打開」→ 再按「打開」（App 未經 Apple 公證，只需第一次這樣做）。
+3. 內附 MariaDB 10.11.18（與 Windows 版同版本），開啟自動啟動、結束（含 ⌘Q）自動停止。Apple 晶片 Mac 會透過 Rosetta 2 執行。
+4. 資料存放在 `~/Library/Application Support/ZMSAccounting`；程式內「版本更新」會下載新版並自動取代 App 後重新開啟。
+5. 建置（在 Mac 上）：`bash tools/build_macos.sh`（會先執行 `tools/prepare_mariadb_mac.sh` 從 Homebrew 封存下載 MariaDB）。
 
 ## 安裝（Windows 10／11 64 位元）
 1. 執行 `ZMSAccounting-Setup-<版本>.exe`（不需系統管理員權限，裝在 `%LOCALAPPDATA%\Programs\ZMSAccounting`）。

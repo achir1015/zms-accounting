@@ -149,6 +149,14 @@ class App:
             if self.st.mode == "embedded":
                 self.server = LocalDatabaseServer(self.st)
                 self.server.start()
+                # macOS 按 ⌘Q 或程式被結束時不一定會觸發視窗關閉事件 → 程式結束時一律停止資料庫
+                import atexit
+                atexit.register(self.shutdown)
+                try:
+                    import signal
+                    signal.signal(signal.SIGTERM, lambda *a: (self.shutdown(), os._exit(0)))
+                except Exception:
+                    pass
             self.db = DB(self.st)
             self.db.prepare()
             self.st.save()
@@ -244,6 +252,7 @@ class App:
         p.add(ft.Row([left, ft.Container(form, expand=4, alignment=ft.Alignment.CENTER, bgcolor=T.BG)],
                      expand=True, spacing=0))
         p.update()
+        log.info("ui: login shown (first=%s)", first)
 
     # ================================================================ 主畫面
     def allowed(self, func, lvl):
@@ -485,6 +494,7 @@ class App:
         if self.server:
             self.server.stop()
             self.server = None
+            log.info("shutdown: database stopped")
 
 
 def muted_light(text, size=13):

@@ -9,3 +9,6 @@ dist/
 dist-installer/
 packaging/mariadb/
 *.spec
+packaging/mariadb-mac/
+dist-mac/
+build-mac/

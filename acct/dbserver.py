@@ -47,13 +47,36 @@ class LocalDatabaseServer:
     def log_path(self):
         return os.path.join(os.path.dirname(self.st.datadir), "mariadb.log")
 
+    @property
+    def basedir(self):
+        return os.path.dirname(self.st.mariadb_bin.rstrip("/\\"))
+
+    def _share(self):
+        """錯誤訊息與字元集資料夾（Homebrew 版程式內建的路徑是佔位字串，必須明確指定）。"""
+        for sub in ("mysql", "mariadb"):
+            d = os.path.join(self.basedir, "share", sub)
+            if os.path.isdir(os.path.join(d, "english")):
+                return d
+        return ""
+
+    def _unix_opts(self):
+        share = self._share()
+        opts = {"basedir": self.basedir, "socket": os.path.join(self.st.datadir, "mysql.sock"),
+                "pid-file": os.path.join(self.st.datadir, "mariadbd.pid")}
+        if share:
+            opts["lc-messages-dir"] = share
+            opts["character-sets-dir"] = os.path.join(share, "charsets")
+        return opts
+
     def _write_ini(self):
         extra = ""
+        datadir = self.st.datadir.replace("\\", "/")
         if os.name != "nt":
-            base = os.path.dirname(self.st.mariadb_bin.rstrip("/"))
-            extra = "basedir=%s\nsocket=%s\n" % (base, os.path.join(self.st.datadir, "mysql.sock"))
+            # macOS 資料夾在 Application Support（含空白），值一律加引號
+            extra = "".join('%s="%s"\n' % kv for kv in self._unix_opts().items())
+            datadir = '"%s"' % datadir
         with open(self.ini_path, "w", encoding="utf-8") as f:
-            f.write(INI.format(datadir=self.st.datadir.replace("\\", "/"), port=self.st.port, extra=extra))
+            f.write(INI.format(datadir=datadir, port=self.st.port, extra=extra))
 
     def _can_login(self) -> bool:
         try:
@@ -104,9 +127,14 @@ class LocalDatabaseServer:
             if self.proc.poll() is not None:
                 raise RuntimeError("資料庫啟動失敗，詳細內容請看：" + self.log_path)
             if listening(self.st.host, self.st.port):
-                if getattr(self, "_need_pw", False):
+                if os.name != "nt" and (getattr(self, "_need_pw", False) or not self._can_login()):
+                    # macOS 初始化時 root 是空密碼；若上次在設定密碼前中斷，這裡補設
                     time.sleep(0.5)
-                    self._set_root_pw()
+                    try:
+                        self._set_root_pw()
+                    except Exception:
+                        if getattr(self, "_need_pw", False):
+                            raise
                 return
             time.sleep(0.3)
         raise RuntimeError("資料庫啟動逾時，詳細內容請看：" + self.log_path)
@@ -116,9 +144,11 @@ class LocalDatabaseServer:
             cmd = [self._bin("mariadb-install-db"), "--datadir=" + self.st.datadir, "--port=%d" % self.st.port,
                    "--password=" + self.st.password]
         else:
-            base = os.path.dirname(self.st.mariadb_bin.rstrip("/"))
-            cmd = [self._bin("mariadb-install-db"), "--no-defaults", "--basedir=" + base,
-                   "--datadir=" + self.st.datadir, "--auth-root-authentication-method=normal", "--skip-test-db"]
+            o = self._unix_opts()
+            cmd = [self._bin("mariadb-install-db"), "--no-defaults", "--basedir=" + self.basedir,
+                   "--datadir=" + self.st.datadir, "--auth-root-authentication-method=normal", "--skip-test-db",
+                   "--skip-name-resolve"]
+            cmd += ["--%s=%s" % (k, o[k]) for k in ("lc-messages-dir", "character-sets-dir") if k in o]
             self._need_pw = True
         r = subprocess.run(cmd, capture_output=True, text=True, creationflags=NO_WINDOW)
         if r.returncode != 0:

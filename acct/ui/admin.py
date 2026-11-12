@@ -15,6 +15,7 @@ FUNC_ICON = {"BAS": (ft.Icons.FOLDER_SPECIAL, "sky"), "VOU": (ft.Icons.EDIT_NOTE
              "FIN": (ft.Icons.INSIGHTS, "violet"), "CLS": (ft.Icons.EVENT_AVAILABLE, "pink"),
              "SYS": (ft.Icons.ADMIN_PANEL_SETTINGS, "rose")}
 LEVELS = [("0", "無"), ("1", "查詢"), ("2", "維護")]
+MAC = __import__("sys").platform == "darwin"
 
 
 # ====================================================================== 使用者與權限
@@ -239,8 +240,11 @@ class Update(ft.Column):
                 T.card(ft.Column([
                     T.icon_tile(ft.Icons.SHORTCUT, "teal", 52, radius=16),
                     ft.Text("桌面捷徑", size=17, weight=ft.FontWeight.W_700),
-                    T.muted("安裝時已建立桌面與開始功能表捷徑；如果不見了，按下面按鈕重建。", 12),
-                    T.btn("重建桌面捷徑", ft.Icons.DESKTOP_WINDOWS, lambda e: self.shortcut(), kind="accent")],
+                    T.muted("App 在「應用程式」資料夾，可拖到 Dock 常駐；也可以在桌面建立替身。" if MAC else
+                            "安裝時已建立桌面與開始功能表捷徑；如果不見了，按下面按鈕重建。", 12),
+                    T.btn("在桌面建立替身" if MAC else "重建桌面捷徑",
+                          ft.Icons.DESKTOP_MAC if MAC else ft.Icons.DESKTOP_WINDOWS, lambda e: self.shortcut(),
+                          kind="accent")],
                     spacing=10), width=340, padding=22)], spacing=14, vertical_alignment=ft.CrossAxisAlignment.START),
             T.card(ft.Column([ft.Text("系統資訊", size=15, weight=ft.FontWeight.W_700),
                               T.muted("系統開發：吳玉柱 先生 與 Claude AI Opus 5.5", 13),
@@ -317,7 +321,7 @@ class Update(ft.Column):
         self.ctx.page.run_thread(work)
 
     def shortcut(self):
-        self.ctx.guard(maintenance.create_desktop_shortcut, ok="桌面捷徑已建立")
+        self.ctx.guard(maintenance.create_desktop_shortcut, ok="桌面替身已建立" if MAC else "桌面捷徑已建立")
 
 
 # ====================================================================== 操作紀錄

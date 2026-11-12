@@ -72,8 +72,27 @@ def asset_suffix():
     if os.name == "nt":
         return "-Setup-"
     if sys.platform == "darwin":
-        return ".dmg"
+        return "-mac.dmg"
     return ""
+
+
+def asset_name(ver):
+    """發佈檔名：Windows ZMSAccounting-Setup-1.2.0.exe；macOS ZMSAccounting-1.2.0-mac.dmg"""
+    if os.name == "nt":
+        return "%s-Setup-%s.exe" % (APP_ID, ver)
+    if sys.platform == "darwin":
+        return "%s-%s-mac.dmg" % (APP_ID, ver)
+    return ""
+
+
+def current_app_bundle():
+    """macOS：目前執行中的 .app 路徑（開發模式回傳空字串）。"""
+    if sys.platform != "darwin" or not getattr(sys, "frozen", False):
+        return ""
+    p = os.path.abspath(sys.executable)
+    while p and p != "/" and not p.endswith(".app"):
+        p = os.path.dirname(p)
+    return p if p.endswith(".app") else ""
 
 
 def _latest_via_page(timeout):
@@ -87,8 +106,8 @@ def _latest_via_page(timeout):
         raise RuntimeError("找不到發佈版本")
     ver = tag.lstrip("vV")
     assets = []
-    if os.name == "nt":
-        name = "%s-Setup-%s.exe" % (APP_ID, ver)
+    name = asset_name(ver)
+    if name:
         assets = [dict(name=name, size=0, browser_download_url="https://github.com/%s/releases/download/%s/%s"
                        % (GITHUB_REPO, tag, name))]
     return dict(tag_name=tag, body="（更新內容請按「前往發佈頁」查看）", assets=assets, html_url=final)
@@ -140,14 +159,46 @@ def launch_installer(path):
     if os.name == "nt":
         subprocess.Popen([path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RELAUNCH=1"],
                          creationflags=0x00000008 | 0x00000200)   # DETACHED_PROCESS | NEW_PROCESS_GROUP
-    else:
-        subprocess.Popen(["open", path])
+        return
+    app = current_app_bundle()
+    if not app or not os.access(os.path.dirname(app), os.W_OK):
+        subprocess.Popen(["open", path])          # 無法自動替換：打開 DMG 讓使用者拖曳安裝
+        return
+    # 等本程式結束 → 掛載 DMG → 以新版取代目前的 .app → 重新開啟
+    script = os.path.join(tempfile.gettempdir(), APP_ID + "-update.sh")
+    with open(script, "w", encoding="utf-8", newline="\n") as f:
+        f.write("""#!/bin/bash
+PID=%d; DMG="%s"; APP="%s"
+while kill -0 $PID 2>/dev/null; do sleep 0.5; done
+sleep 2
+MNT=$(mktemp -d)
+hdiutil attach -nobrowse -quiet -mountpoint "$MNT" "$DMG" || { open "$DMG"; exit 1; }
+SRC=$(ls -d "$MNT"/*.app | head -1)
+rm -rf "$APP.old"
+if mv "$APP" "$APP.old" && ditto "$SRC" "$APP"; then rm -rf "$APP.old"; else rm -rf "$APP"; mv "$APP.old" "$APP"; fi
+hdiutil detach -quiet "$MNT"
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null
+open "$APP"
+""" % (os.getpid(), path, app))
+    os.chmod(script, 0o755)
+    subprocess.Popen(["/bin/bash", script], start_new_session=True, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL)
 
 
 # ================================================================ 桌面捷徑
 def create_desktop_shortcut():
+    if sys.platform == "darwin":
+        app = current_app_bundle()
+        if not app:
+            raise RuntimeError("開發模式沒有 App，請在安裝版使用此功能")
+        r = subprocess.run(["osascript", "-e", 'tell application "Finder" to make alias file to POSIX file "%s" '
+                            'at desktop' % app], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError("建立替身失敗（請在「系統設定 → 隱私權與安全性 → 自動化」允許控制 Finder）：%s"
+                               % r.stderr.strip())
+        return
     if os.name != "nt":
-        raise RuntimeError("目前只支援 Windows 建立捷徑")
+        raise RuntimeError("目前只支援 Windows 與 macOS 建立捷徑")
     exe = sys.executable if getattr(sys, "frozen", False) else None
     if not exe:
         raise RuntimeError("開發模式沒有執行檔，請在安裝版使用此功能")

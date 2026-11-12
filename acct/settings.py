@@ -45,6 +45,16 @@ def data_dir() -> str:
     return d
 
 
+def bundled_mariadb() -> str:
+    """安裝版附帶的 MariaDB：Windows 在程式旁 mariadb/bin；macOS 在 .app/Contents/Resources/mariadb/bin。"""
+    exe = "mariadbd.exe" if os.name == "nt" else "mariadbd"
+    for c in (os.path.join(program_dir(), "mariadb", "bin"),
+              os.path.normpath(os.path.join(program_dir(), "..", "Resources", "mariadb", "bin"))):
+        if os.path.isfile(os.path.join(c, exe)):
+            return c
+    return ""
+
+
 def _mariadb_candidates():
     exe = "mariadbd.exe" if os.name == "nt" else "mariadbd"
     yield os.environ.get("ACCT_MARIADB_BIN", "")
@@ -97,9 +107,9 @@ class Settings:
         if not s.datadir:
             s.datadir = os.path.join(data_dir(), "mariadb")
         exe = "mariadbd.exe" if os.name == "nt" else "mariadbd"
-        bundled = os.path.join(program_dir(), "mariadb", "bin")
-        if os.path.isfile(os.path.join(bundled, exe)):
-            s.mariadb_bin = bundled            # 安裝版一律用附帶的資料庫程式
+        bundled = bundled_mariadb()
+        if bundled:
+            s.mariadb_bin = bundled            # 安裝版一律用附帶的資料庫程式（程式搬家或更新後路徑也對）
         elif not os.path.isfile(os.path.join(s.mariadb_bin or "", exe)):
             s.mariadb_bin = find_mariadb()
         if s.mode == "embedded" and not s.password:
