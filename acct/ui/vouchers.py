@@ -40,7 +40,7 @@ class LineRow(ft.Container):
                                    on_blur=self.tidy, on_submit=self.submit, height=H)
         self.credit = T.money_field("", data.get("credit"), width=130, hint_text="貸方", on_change=self.changed,
                                     on_blur=self.tidy, on_submit=self.submit, height=H)
-        self.dept = T.dropdown("", entry.dept_opts, data.get("dept") or "", width=130, blank="（部門）",
+        self.dept = T.dropdown("", entry.dept_opts, data.get("dept") or "", width=130, blank="部門",
                                filterable=False)
         self.partner = T.dropdown("", [], data.get("partner") or None, width=190, hint_text="往來對象")
         for tf in (self.summary, self.debit, self.credit):

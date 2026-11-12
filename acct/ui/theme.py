@@ -156,7 +156,7 @@ def money_field(label="", value="", width=130, **kw):
     return field(label, v, width=width, text_align=ft.TextAlign.RIGHT, **kw)
 
 
-def date_field(label="日期", value=None, width=140, **kw):
+def date_field(label="日期", value=None, width=150, **kw):
     return field(label, rocdate.show(value or rocdate.today()), width=width, hint_text="115/11/12",
                  prefix_icon=ft.Icons.CALENDAR_MONTH, **kw)
 

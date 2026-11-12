@@ -114,7 +114,10 @@ class App:
         p = self.page
         p.title = APP_NAME
         p.fonts = {"NotoSansTC": "fonts/NotoSansTC-VF.ttf"}
-        p.theme = ft.Theme(color_scheme_seed=T.PRIMARY, font_family="NotoSansTC")
+        from . import textscale
+        textscale.install(p)                      # Windows 文字大小 210% 之類：限制放大倍數，免得字被切掉
+        p.theme = ft.Theme(color_scheme_seed=T.PRIMARY, font_family="NotoSansTC", 
+                             text_theme=textscale.text_theme(T.TEXT))
         p.theme_mode = ft.ThemeMode.LIGHT
         p.bgcolor = T.BG
         p.padding = 0
@@ -225,7 +228,7 @@ class App:
             u, _, w = dev.partition(":")
             self.books.login(u, w)
             self.main()
-            route = (p.route or "").strip("/")
+            route = (p.route or "").strip("/") or os.environ.get("ACCT_DEV_ROUTE", "")
             if route and self.find(route):
                 self.go(route)
             return
@@ -296,14 +299,16 @@ class App:
             ft.Container(ft.Row([ft.Image(src="icon.png", width=40, height=40),
                                  ft.Column([ft.Text("資料助秘", size=11, color="#9FB6D8"),
                                             ft.Text(APP_SHORT, size=17, weight=ft.FontWeight.W_800,
-                                                    color=ft.Colors.WHITE)], spacing=0)], spacing=10),
-                         padding=ft.Padding.only(left=18, top=18, bottom=14)),
+                                                    color=ft.Colors.WHITE, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)], spacing=0, expand=True)],
+                                 spacing=10),
+                         padding=ft.Padding.only(left=18, right=10, top=18, bottom=14)),
             ft.Divider(color="#2A4A78", height=1),
             ft.Container(self.sidebar, expand=True, padding=ft.Padding.symmetric(horizontal=10, vertical=8)),
             ft.Divider(color="#2A4A78", height=1),
             ft.Container(ft.Row([avatar, ft.Column([
-                ft.Text(u["name"], color=ft.Colors.WHITE, size=13, weight=ft.FontWeight.W_600),
-                ft.Text(("系統管理員" if u["is_admin"] else u["role"]) or "使用者", color="#9FB6D8", size=11)],
+                ft.Text(u["name"], color=ft.Colors.WHITE, size=13, weight=ft.FontWeight.W_600, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Text(("系統管理員" if u["is_admin"] else u["role"]) or "使用者", color="#9FB6D8", size=11,
+                        max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)],
                 spacing=0, expand=True),
                 ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, icon_color="#C9D6EA", items=[
                     ft.PopupMenuItem("變更密碼", icon=ft.Icons.KEY, on_click=lambda e: self.change_password()),
@@ -349,7 +354,7 @@ class App:
             open_ = g in self.expanded
             items.append(ft.Container(
                 ft.Row([ft.Icon(ic, size=18, color="#8FA9CF"),
-                        ft.Text(g, size=13, color="#B7C8E2", weight=ft.FontWeight.W_600, expand=True),
+                        ft.Text(g, size=13, color="#B7C8E2", weight=ft.FontWeight.W_600, expand=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                         ft.Icon(ft.Icons.EXPAND_MORE if open_ else ft.Icons.CHEVRON_RIGHT, size=18, color="#7F98BF")],
                        spacing=10),
                 padding=ft.Padding.only(left=12, right=8, top=10, bottom=6), border_radius=8,
@@ -366,8 +371,8 @@ class App:
             ft.Row([ft.Container(ft.Icon(icon, size=17, color=fg if sel else "#C9D6EA"), width=30, height=30,
                                  border_radius=9, alignment=ft.Alignment.CENTER,
                                  bgcolor=bg if sel else "#22FFFFFF"),
-                    ft.Text(title, size=14, color=ft.Colors.WHITE if sel else "#D5E0F0",
-                            weight=ft.FontWeight.W_700 if sel else ft.FontWeight.W_500)], spacing=12),
+                    ft.Text(title, size=14, color=ft.Colors.WHITE if sel else "#D5E0F0", expand=True, tooltip=title,
+                            weight=ft.FontWeight.W_700 if sel else ft.FontWeight.W_500, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)], spacing=12),
             padding=ft.Padding.only(left=12 if top else 22, right=8, top=6, bottom=6), border_radius=10,
             bgcolor="#2E5A93" if sel else None, ink=True, on_click=lambda e, s=sid: self.go(s),
             border=ft.Border.only(left=ft.BorderSide(3, T.GOLD)) if sel else None)
