@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # 建置 macOS 版：dist-mac/資料助秘之一般公司會計.app 與 dist-mac/ZMSAccounting-<版本>-mac.dmg
 # 用法（在 Mac 上）：bash tools/build_macos.sh
 set -euo pipefail
@@ -50,9 +50,50 @@ pb "Add :NSAppleEventsUsageDescription string 在桌面建立本系統的替身"
 
 FINAL="dist-mac/$NAME.app"
 rm -rf "$FINAL"; mv "$APP" "$FINAL"
-echo "== 簽章（ad-hoc）"
-codesign --force --deep -s - "$FINAL"
+# 專用簽章鑰匙圈（~/Developer/zms-signing，密碼檔不進 git）：先解鎖，SSH 下也能簽
+SIGN_KC="$HOME/Library/Keychains/zms-signing.keychain-db"
+if [ -f "$SIGN_KC" ] && [ -f "$HOME/Developer/zms-signing/kc.pass" ]; then
+  security unlock-keychain -p "$(cat "$HOME/Developer/zms-signing/kc.pass")" "$SIGN_KC"
+fi
+# 簽章：鑰匙圈有「Developer ID Application」憑證就正式簽章＋強化執行階段（可公證）；沒有就 ad-hoc
+IDENT=$(security find-identity -v -p codesigning | grep -o '"Developer ID Application: [^"]*"' | head -1 | tr -d '"' || true)
+if [ -n "$IDENT" ]; then
+  echo "== 簽章（${IDENT}）"
+  ENT=packaging/mac-entitlements.plist
+  # 由內而外：先簽 MariaDB 的函式庫與執行檔，再簽主程式與整個 App
+  find "$FINAL/Contents/Resources" -type f \( -name "*.dylib" -o -name "*.so" \) -print0 |
+    xargs -0 -I{} codesign --force --timestamp --options runtime -s "$IDENT" "{}"
+  find "$FINAL/Contents/Resources" -type f -perm +111 ! -name "*.dylib" ! -name "*.so" -print0 |
+    while IFS= read -r -d '' f; do
+      if file -b "$f" | grep -q Mach-O; then codesign --force --timestamp --options runtime -s "$IDENT" "$f"; fi
+    done
+  codesign --force --timestamp --options runtime --entitlements "$ENT" -s "$IDENT" "$FINAL/Contents/MacOS/ZMSAccounting"
+  codesign --force --timestamp --options runtime --entitlements "$ENT" -s "$IDENT" "$FINAL"
+else
+  echo "== 簽章（ad-hoc；找不到 Developer ID 憑證）"
+  codesign --force --deep -s - "$FINAL"
+fi
 codesign --verify --deep --strict "$FINAL" && echo "簽章 OK"
+
+# 公證：先用 xcrun notarytool store-credentials 建好鑰匙圈設定檔（預設名稱 zms-notary）
+NOTARY="${NOTARY_PROFILE:-zms-notary}"
+notarize() {   # $1＝要送的檔案（.zip 或 .dmg）
+  xcrun notarytool submit "$1" --keychain-profile "$NOTARY" --wait --timeout 60m | tee build-mac/notary.txt
+  grep -q "status: Accepted" build-mac/notary.txt || {
+    ID=$(grep -m1 "  id:" build-mac/notary.txt | awk '{print $2}')
+    [ -n "$ID" ] && xcrun notarytool log "$ID" --keychain-profile "$NOTARY" || true
+    echo "公證失敗"; exit 1; }
+}
+CAN_NOTARIZE=""
+if [ -n "$IDENT" ] && xcrun notarytool history --keychain-profile "$NOTARY" >/dev/null 2>&1; then CAN_NOTARIZE=1; fi
+if [ -n "$CAN_NOTARIZE" ]; then
+  echo "== 公證 App"
+  ditto -c -k --keepParent "$FINAL" build-mac/app.zip
+  notarize build-mac/app.zip
+  xcrun stapler staple "$FINAL"
+elif [ -n "$IDENT" ]; then
+  echo "== 略過公證（沒有 notarytool 設定檔 ${NOTARY}）"
+fi
 
 echo "== DMG"
 STAGE=build-mac/dmg; rm -rf "$STAGE"; mkdir -p "$STAGE"
@@ -65,6 +106,14 @@ for i in 1 2 3; do
   hdiutil create -volname "$NAME $VER" -srcfolder "$STAGE" -ov -format UDZO -size ${SIZE_MB}m "$DMG" && break
   echo "hdiutil 重試 $i"; sleep 5
 done
+if [ -n "$IDENT" ]; then codesign --force --timestamp -s "$IDENT" "$DMG"; fi
+if [ -n "$CAN_NOTARIZE" ]; then
+  echo "== 公證 DMG"
+  notarize "$DMG"
+  xcrun stapler staple "$DMG"
+  spctl -a -vv -t install "$DMG" 2>&1 | head -3
+  spctl -a -vv "$FINAL" 2>&1 | head -3
+fi
 shasum -a 256 "$DMG"
 du -h "$DMG"
 echo "BUILD_DONE"
