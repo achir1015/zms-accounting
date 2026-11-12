@@ -9,7 +9,7 @@ from . import theme as T
 ICONS = {"intro": (ft.Icons.WB_SUNNY, "amber"), "quickstart": (ft.Icons.ROCKET_LAUNCH, "rose"),
          "flow": (ft.Icons.ACCOUNT_TREE, "violet"), "home": (ft.Icons.DASHBOARD_ROUNDED, "blue"),
          "voucher_entry": (ft.Icons.EDIT_NOTE, "teal"), "voucher_list": (ft.Icons.MANAGE_SEARCH, "teal"),
-         "voucher_review": (ft.Icons.FACT_CHECK, "amber"), "journal": (ft.Icons.MENU_BOOK, "orange"),
+         "voucher_review": (ft.Icons.FACT_CHECK, "amber"), "gl_import": (ft.Icons.SYNC_ALT, "teal"), "journal": (ft.Icons.MENU_BOOK, "orange"),
          "ledger": (ft.Icons.LIST_ALT, "orange"), "general_ledger": (ft.Icons.ACCOUNT_TREE, "orange"),
          "cash_book": (ft.Icons.PAYMENTS, "teal"), "partner_ledger": (ft.Icons.HANDSHAKE, "sky"),
          "trial_balance": (ft.Icons.BALANCE, "violet"), "income": (ft.Icons.TRENDING_UP, "violet"),

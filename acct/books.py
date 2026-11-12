@@ -7,6 +7,7 @@ import json
 from decimal import ROUND_HALF_UP, Decimal
 
 from . import passwords, rocdate
+from .glimport import GLImportMixin
 from .seed import FUNCS, ROLES
 
 STATUS = {0: "未審核", 1: "已審核", 2: "已過帳", 9: "作廢"}
@@ -60,7 +61,7 @@ MASTERS = {
 }
 
 
-class Books:
+class Books(GLImportMixin):
     def __init__(self, db):
         self.db = db
         self.user = None

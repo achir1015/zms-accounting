@@ -210,3 +210,26 @@ CREATE TABLE IF NOT EXISTS ratios (
   sort SMALLINT NOT NULL DEFAULT 0,
   UNIQUE KEY uq_ratio (name)
 );
+
+-- 進銷存拋轉匯入紀錄（v1.4.0）
+CREATE TABLE IF NOT EXISTS gl_imports (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  batch_uid VARCHAR(64) NOT NULL,
+  batch_no VARCHAR(20) NOT NULL DEFAULT '',
+  source VARCHAR(60) NOT NULL DEFAULT '',
+  company_name VARCHAR(80) NOT NULL DEFAULT '',
+  tax_id VARCHAR(10) NOT NULL DEFAULT '',
+  date_from DATE NULL,
+  date_to DATE NULL,
+  voucher_count INT NOT NULL DEFAULT 0,
+  total DECIMAL(16,2) NOT NULL DEFAULT 0,
+  voucher_ids TEXT NULL,
+  voucher_nos VARCHAR(60) NOT NULL DEFAULT '',
+  created_info TEXT NULL,
+  status TINYINT NOT NULL DEFAULT 1,
+  imported_by VARCHAR(20) NOT NULL DEFAULT '',
+  imported_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  canceled_by VARCHAR(20) NOT NULL DEFAULT '',
+  canceled_at DATETIME NULL,
+  INDEX idx_uid (batch_uid)
+);

@@ -31,7 +31,8 @@ def menu():
         ("傳票作業", I.RECEIPT_LONG, "teal", [
             ("voucher_entry", "傳票登錄", I.EDIT_NOTE, "VOU", 2),
             ("voucher_list", "傳票查詢", I.MANAGE_SEARCH, "VOU", 1),
-            ("voucher_review", "審核過帳", I.FACT_CHECK, "APR", 2)]),
+            ("voucher_review", "審核過帳", I.FACT_CHECK, "APR", 2),
+            ("gl_import", "進銷存拋轉", I.SYNC_ALT, "VOU", 2)]),
         ("帳簿查詢", I.MENU_BOOK, "amber", [
             ("journal", "日記簿", I.MENU_BOOK, "LED", 1),
             ("ledger", "明細分類帳", I.LIST_ALT, "LED", 1),
@@ -73,7 +74,7 @@ def menu():
 
 
 def build_screen(sid, ctx, **kw):
-    from . import admin, closing, dashboard, helpview, ledgers, masters, statements, vouchers
+    from . import admin, closing, dashboard, glimport_view, helpview, ledgers, masters, statements, vouchers
     table = {
         "home": dashboard.Dashboard, "voucher_entry": vouchers.VoucherEntry, "voucher_list": vouchers.VoucherList,
         "voucher_review": vouchers.Review, "journal": ledgers.Journal, "ledger": ledgers.Ledger,
@@ -84,7 +85,7 @@ def build_screen(sid, ctx, **kw):
         "templates": masters.Templates, "periods": closing.Periods, "revaluation": closing.Revaluation,
         "year_end": closing.YearEnd, "budget_edit": closing.BudgetEdit, "ratio_setup": closing.RatioSetup,
         "users": admin.Users, "company": admin.Company, "backup": admin.Backup, "update": admin.Update,
-        "mobile_link": admin.MobileLink,
+        "mobile_link": admin.MobileLink, "gl_import": glimport_view.GLImport,
         "audit": admin.Audit, "help": helpview.Help,
     }
     if sid in table:
