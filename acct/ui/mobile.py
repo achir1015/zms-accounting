@@ -1,4 +1,4 @@
-"""手機版（Android／iPhone）：連線設定 → 登入 → 直向版面（上方工具列＋側邊選單）。
+﻿"""手機版（Android／iPhone）：連線設定 → 登入 → 直向版面（上方工具列＋側邊選單）。
 
 資料一律透過電腦版的「手機連線」服務存取（acct.remote），畫面程式與電腦版共用。
 """
@@ -13,6 +13,8 @@ from ..help_text import text_for
 from ..remote import Client, RemoteBooks, RemoteReports
 from ..voice import speaker
 from . import theme as T
+
+IOS_INSTALL_PAGE = "https://achir1015.github.io/zms-accounting/ios/"
 
 # 手機不提供的功能（需要直接操作電腦上的資料庫檔案或程式）
 DESKTOP_ONLY = {"backup", "update", "mobile_link"}
@@ -67,10 +69,19 @@ def install_audio(page):
     speaker.ext_playing = lambda: st["playing"]
 
 
+def is_tablet(page) -> bool:
+    """iPad（或寬螢幕平板）：用電腦版版面（側邊欄），資料一樣透過電腦的手機連線服務。"""
+    if os.environ.get("ACCT_TABLET"):
+        return True
+    w = page.width or 0
+    return page.platform == ft.PagePlatform.IOS and w >= 900
+
+
 def start(app):
     p = app.page
-    T.MOBILE = True
-    T.install_mobile_hooks()
+    T.MOBILE = not is_tablet(p)
+    if T.MOBILE:
+        T.install_mobile_hooks()
     install_audio(p)
 
     def on_route(e):
@@ -119,7 +130,7 @@ def connect_screen(app, msg="", url=""):
             ft.FilledButton("連線", icon=ft.Icons.LINK, height=48, on_click=go, bgcolor=T.PRIMARY,
                             style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)))],
             spacing=12, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-            bgcolor=T.CARD, border_radius=20, padding=20),
+            bgcolor=T.CARD, border_radius=20, padding=20, width=None if T.MOBILE else 460),
         T.muted("v%s" % APP_VERSION, 11)],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10, scroll=ft.ScrollMode.AUTO),
         padding=20, expand=True, gradient=gradient()), expand=True))
@@ -213,7 +224,7 @@ def login(app, msg=""):
                           lambda e: speaker.say_help("quickstart", text_for("quickstart")[1]), kind="ghost")],
                    alignment=ft.MainAxisAlignment.CENTER, wrap=True)],
             spacing=12, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
-            bgcolor=T.CARD, border_radius=20, padding=20),
+            bgcolor=T.CARD, border_radius=20, padding=20, width=None if T.MOBILE else 460),
         T.muted("已連線：%s　v%s" % (app.client.url, APP_VERSION), 11)],
         horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10, scroll=ft.ScrollMode.AUTO),
         padding=20, expand=True, gradient=gradient()), expand=True))
@@ -283,6 +294,8 @@ def check_update(app):
         return
     if not info:
         return
+    if app.page.platform == ft.PagePlatform.IOS:      # iPhone／iPad：開 GitHub Pages 安裝頁
+        info["url"] = IOS_INSTALL_PAGE
 
     async def open_dl(e):
         await ft.UrlLauncher().launch_url(info["url"] or info["page"])
@@ -292,8 +305,15 @@ def check_update(app):
                           bgcolor=T.ACCENT, border_radius=12, padding=12, margin=ft.Margin.symmetric(horizontal=10),
                           on_click=open_dl, ink=True)
     try:
-        app.page.drawer.controls.insert(1, banner)
-        app.ctx.toast("有新版本 v%s，請到選單下載更新" % info["version"])
+        if app.page.drawer is not None:               # 手機：放在側邊選單最上面
+            app.page.drawer.controls.insert(1, banner)
+        else:                                         # iPad：電腦版版面上方的提示
+            app.update_banner.content = ft.Container(
+                ft.Text("有新版本 v%s，點這裡下載" % info["version"], color=ft.Colors.WHITE, size=13,
+                        weight=ft.FontWeight.W_600), bgcolor=T.ACCENT, border_radius=20, on_click=open_dl,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6))
+            app.update_banner.visible = True
+        app.ctx.toast("有新版本 v%s，請下載更新" % info["version"])
         app.page.update()
     except Exception:
         pass

@@ -10,7 +10,7 @@ export SSL_CERT_FILE="$(.venv/bin/python -c 'import certifi; print(certifi.where
 VER=$(.venv/bin/python -c "import acct; print(acct.APP_VERSION)")
 IFS=. read -r A B C <<< "$VER"
 NUM=$((A * 10000 + B * 100 + C))
-echo "== 版本 $VER（build $NUM）"
+echo "== 版本 ${VER}（build ${NUM}）"
 
 mkdir -p android
 if [ ! -f android/zmsaccounting.jks ]; then

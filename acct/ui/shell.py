@@ -284,7 +284,7 @@ class App:
         self.groups = [(g, ic, tone, [it for it in items if self.allowed(it[3], it[4]) and it[0] not in hide])
                        for g, ic, tone, items in menu()]
         self.groups = [g for g in self.groups if g[3]]
-        if self.mobile:
+        if self.mobile and T.MOBILE:
             self.expanded = set()
             mobile.main(self)
             return
@@ -307,7 +307,9 @@ class App:
                 spacing=0, expand=True),
                 ft.PopupMenuButton(icon=ft.Icons.MORE_VERT, icon_color="#C9D6EA", items=[
                     ft.PopupMenuItem("變更密碼", icon=ft.Icons.KEY, on_click=lambda e: self.change_password()),
-                    ft.PopupMenuItem("登出", icon=ft.Icons.LOGOUT, on_click=lambda e: self.logout())])],
+                    ft.PopupMenuItem("登出", icon=ft.Icons.LOGOUT, on_click=lambda e: self.logout())] +
+                    ([ft.PopupMenuItem("更換會計電腦", icon=ft.Icons.LINK, on_click=lambda e: self._switch_server())]
+                     if self.mobile else []))],
                 spacing=10), padding=14)], spacing=0),
             width=248, gradient=ft.LinearGradient(begin=ft.Alignment.TOP_CENTER, end=ft.Alignment.BOTTOM_CENTER,
                                                  colors=[T.SIDEBAR_TOP, T.SIDEBAR_BOTTOM]))
@@ -325,9 +327,18 @@ class App:
             border=ft.Border.only(bottom=ft.BorderSide(1, T.LINE)))
         self.body = ft.Container(expand=True, padding=ft.Padding.only(left=24, right=24, top=18, bottom=14))
         p.controls.clear()
-        p.add(ft.Row([side, ft.Column([top, self.body], expand=True, spacing=0)], expand=True, spacing=0))
+        layout = ft.Row([side, ft.Column([top, self.body], expand=True, spacing=0)], expand=True, spacing=0)
+        p.add(ft.SafeArea(layout, expand=True) if self.mobile else layout)
         self.go("home")
-        threading.Thread(target=self._check_update, daemon=True).start()
+        if self.mobile:                              # iPad：資料在電腦上，更新檢查走手機版的方式
+            from . import mobile
+            p.run_thread(mobile.check_update, self)
+        else:
+            threading.Thread(target=self._check_update, daemon=True).start()
+
+    def _switch_server(self):
+        from . import mobile
+        mobile.switch_server(self)
 
     def render_sidebar(self):
         items = []
@@ -386,7 +397,7 @@ class App:
                                ft.Icon(ft.Icons.CHEVRON_RIGHT, size=16, color=T.MUTED),
                                ft.Text(it[1], size=15, weight=ft.FontWeight.W_700, color=T.TEXT)]
         self.render_sidebar()
-        if self.mobile:
+        if self.mobile and T.MOBILE:
             from . import mobile
             self.title.value = it[1]
             self.page.run_task(mobile.close_drawer, self.page)
@@ -396,7 +407,7 @@ class App:
                 pass
         try:
             content = build_screen(sid, self.ctx, **kw)
-            if self.mobile:
+            if self.mobile and T.MOBILE:
                 T.mobilize(content)
                 content = ft.Column([content], scroll=ft.ScrollMode.AUTO, expand=True)
             self.body.content = content

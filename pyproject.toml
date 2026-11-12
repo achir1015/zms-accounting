@@ -32,3 +32,6 @@ team_id = "7BN6XJ59KP"
 [tool.flet.ios.info]
 NSLocalNetworkUsageDescription = "連到公司電腦上的會計系統"
 ITSAppUsesNonExemptEncryption = false
+UIRequiresFullScreen = true
+UISupportedInterfaceOrientations = ["UIInterfaceOrientationPortrait"]
+"UISupportedInterfaceOrientations~ipad" = ["UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]

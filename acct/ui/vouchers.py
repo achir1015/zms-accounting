@@ -221,10 +221,12 @@ class VoucherEntry(ft.Column):
         self.save_new_btn = T.btn("存檔並新增下一張", ft.Icons.PLAYLIST_ADD, lambda e: self.save(True), kind="accent")
         self.del_btn = T.btn("刪除", ft.Icons.DELETE_OUTLINE, lambda e: self.delete(), kind="danger", visible=False)
         head = T.card(ft.Column([
-            ft.Row([self.type_row, ft.Container(expand=True),
-                    T.btn("套用常用分錄", ft.Icons.BOOKMARKS, lambda e: self.template_dialog(), kind="outline"),
-                    T.btn("匯入明細", ft.Icons.UPLOAD_FILE, lambda e: self.import_dialog(), kind="outline"),
-                    T.btn("新傳票", ft.Icons.NOTE_ADD, lambda e: self.reset(), kind="ghost")]),
+            # 視窗較窄（iPad、縮小的視窗）時按鈕自動換到下一行
+            ft.Row([self.type_row,
+                    ft.Row([T.btn("套用常用分錄", ft.Icons.BOOKMARKS, lambda e: self.template_dialog(), kind="outline"),
+                            T.btn("匯入明細", ft.Icons.UPLOAD_FILE, lambda e: self.import_dialog(), kind="outline"),
+                            T.btn("新傳票", ft.Icons.NOTE_ADD, lambda e: self.reset(), kind="ghost")], spacing=8)],
+                   wrap=True, run_spacing=10, alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Row([self.date, ft.Column([T.muted("傳票號碼", 11), self.no], spacing=0), self.state, self.attach,
                     self.memo], spacing=16, vertical_alignment=ft.CrossAxisAlignment.CENTER)], spacing=14),
             padding=16)
@@ -236,7 +238,11 @@ class VoucherEntry(ft.Column):
                            ("往來對象", 190))]], spacing=8),
             bgcolor="#EEF3FA", border_radius=10, padding=ft.Padding.symmetric(vertical=8, horizontal=6))
         header_row.visible = not T.MOBILE
-        body = T.card(ft.Column([header_row, self.lines,
+        # 電腦版明細約 1130 寬：可視寬度不夠時（iPad、縮小的視窗）整片左右捲動，欄位不會被截掉
+        grid = (self.lines if T.MOBILE else
+                ft.Row([ft.Column([header_row, self.lines], width=1130, spacing=2)], scroll=ft.ScrollMode.AUTO,
+                       expand=True, vertical_alignment=ft.CrossAxisAlignment.START))
+        body = T.card(ft.Column([header_row if T.MOBILE else ft.Container(height=0), grid,
                                  ft.Row([T.btn("新增一行", ft.Icons.ADD, lambda e: self.add_line(True), kind="ghost"),
                                          T.muted("提示：在金額欄按 Enter 會自動新增下一行，摘要自動沿用上一行，金額自動帶入差額",
                                                  12)])], spacing=6), expand=True, padding=14)
