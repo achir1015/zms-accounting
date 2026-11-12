@@ -1,4 +1,7 @@
 # 資料助秘之一般公司會計
+<img width="800" height="500" alt="image" src="https://github.com/user-attachments/assets/ea87b23e-cb89-492a-b201-1ee45a9a0eae" />
+
+
 
 單一公司使用的總帳會計系統：基本資料 → 傳票登錄 → 審核過帳 → 日記簿／分類帳 → 財務報表 → 關帳與年度結帳。
 資料庫使用 **MariaDB**（安裝版內附，程式開啟自動啟動、關閉自動停止）。
