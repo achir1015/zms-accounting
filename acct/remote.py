@@ -15,18 +15,48 @@ class ConnectionLost(BizError):
     pass
 
 
+def normalize(url):
+    url = (url or "").strip().rstrip("/")
+    if url and "://" not in url:
+        url = "http://" + url
+    if url.count(":") == 1 and url.startswith("http://"):
+        url += ":8765"                           # 只輸入 IP 時補上預設連接埠
+    return url
+
+
 class Client:
-    def __init__(self, url):
-        url = (url or "").strip().rstrip("/")
-        if url and "://" not in url:
-            url = "http://" + url
-        if url.count(":") == 1 and url.startswith("http://"):
-            url += ":8765"                       # 只輸入 IP 時補上預設連接埠
-        self.url = url
+    def __init__(self, url, alternates=()):
+        self.url = normalize(url)
+        self.alternates = [normalize(u) for u in alternates if normalize(u) != self.url]
         self.token = ""
         self.on_relogin = None
+        self.on_switch = None                    # 自動換網址時通知（手機記住新的優先網址）
 
-    def _post(self, path, body, timeout=25):
+    def _switch(self):
+        """目前網址連不上：試其他記住的網址（例如離開公司改走外出通道）。"""
+        for alt in list(self.alternates):
+            try:
+                req = urllib.request.Request(alt + "/api/ping", headers={"User-Agent": APP_ID})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    if wire.loads(r.read()).get("app"):
+                        self.alternates = [u for u in self.alternates if u != alt] + [self.url]
+                        self.url = alt
+                        if self.on_switch:
+                            self.on_switch(alt)
+                        return True
+            except Exception:
+                continue
+        return False
+
+    def _post(self, path, body, timeout=25, _retry=True):
+        try:
+            return self._post_once(path, body, timeout)
+        except ConnectionLost:
+            if _retry and self._switch():
+                return self._post_once(path, body, timeout)
+            raise
+
+    def _post_once(self, path, body, timeout=25):
         req = urllib.request.Request(self.url + path, data=wire.dumps(body), method="POST",
                                      headers={"Content-Type": "application/json", "User-Agent": APP_ID,
                                               "Authorization": "Bearer " + self.token})

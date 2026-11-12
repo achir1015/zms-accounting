@@ -67,6 +67,31 @@ def test_permissions_enforced_on_server(api, books):
         rb.accounts()
 
 
+def test_client_ip_trust():
+    from acct.api import client_ip
+    h = {"Cf-Connecting-Ip": "203.0.113.9", "X-Forwarded-For": "198.51.100.1"}
+    assert client_ip("127.0.0.1", h) == "203.0.113.9"          # 經本機 Cloudflare 通道：採信
+    assert client_ip("192.168.6.50", h) == "192.168.6.50"      # 區網直連：不採信標頭（防偽造）
+    assert client_ip("127.0.0.1", {}) == "127.0.0.1"
+
+
+def test_tunnel_url_parse():
+    from acct.tunnel import parse_quick_url
+    line = "2026-11-12T14:00:00Z INF |  https://brave-cat-happy-river.trycloudflare.com                 |"
+    assert parse_quick_url(line) == "https://brave-cat-happy-river.trycloudflare.com"
+    assert parse_quick_url("INF Requesting new quick Tunnel on trycloudflare.com...") == ""
+
+
+def test_switch_to_alternate_url(api):
+    c = Client("127.0.0.1:1", alternates=["127.0.0.1:%d" % PORT])   # 第一個連不上（例如離開公司）
+    rb = RemoteBooks(c)
+    switched = []
+    c.on_switch = switched.append
+    rb.login("admin", "admin123")
+    assert c.url.endswith(":%d" % PORT) and switched
+    assert rb.account("1111")["name"] == "庫存現金"
+
+
 def test_login_throttle(api):
     c = Client("127.0.0.1:%d" % PORT)
     rb = RemoteBooks(c)

@@ -77,8 +77,7 @@ def start(app):
         """App 已開著時又掃了 QR Code：換連到新的會計電腦。"""
         link = link_from_route(p.route)
         if link and link != (app.client.url if app.client else ""):
-            app.st.extra["server_url"] = link
-            app.st.save()
+            remember(app, link)
             if app.books and getattr(app.books, "user", None):
                 app.books.logout()
             p.drawer = None
@@ -86,8 +85,7 @@ def start(app):
     p.on_route_change = on_route
     url = link_from_route(p.route) or os.environ.get("ACCT_DEV_SERVER") or app.st.extra.get("server_url", "")
     if link_from_route(p.route):
-        app.st.extra["server_url"] = url
-        app.st.save()
+        remember(app, url)
     if url:
         connect(app, url, quiet=True)
     else:
@@ -128,18 +126,35 @@ def connect_screen(app, msg="", url=""):
     p.update()
 
 
+def remember(app, url):
+    """記住連線網址（最多 4 個，最近成功的放最前面）：公司內網址與外出通道網址都記得。"""
+    from ..remote import normalize
+    url = normalize(url)
+    lst = [url] + [u for u in app.st.extra.get("server_urls", []) if u != url]
+    app.st.extra["server_urls"] = lst[:4]
+    app.st.extra["server_url"] = url
+    app.st.save()
+
+
 def connect(app, url, quiet=False):
-    c = Client(url)
+    from ..remote import normalize
+    saved = [u for u in app.st.extra.get("server_urls", []) if u != normalize(url)]
+    c = Client(url, alternates=saved)
     try:
-        info = c.ping()
+        try:
+            info = c.ping()
+        except BizError:
+            if not c._switch():                  # 這個網址連不上 → 試其他記住的網址
+                raise
+            info = c.ping()
     except BizError as e:
         connect_screen(app, str(e) if not quiet else "上次的會計電腦目前連不上：%s" % e, url)
         return
     if info.get("app") != APP_NAME:
         connect_screen(app, "這個網址不是會計系統的手機連線服務", url)
         return
-    app.st.extra["server_url"] = c.url
-    app.st.save()
+    remember(app, c.url)
+    c.on_switch = lambda u: remember(app, u)
     app.client = c
     app.books = RemoteBooks(c)
     app.reports = RemoteReports(c)
@@ -287,6 +302,7 @@ def check_update(app):
 def switch_server(app):
     app.books.logout()
     app.st.extra.pop("server_url", None)
+    app.st.extra.pop("server_urls", None)       # 換一台會計電腦：舊的網址都不要了
     app.st.save()
     connect_screen(app)
 

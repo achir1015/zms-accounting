@@ -17,6 +17,14 @@
 4. 資料存放在 `~/Library/Application Support/ZMSAccounting`；程式內「版本更新」會下載新版並自動取代 App 後重新開啟。
 5. 建置（在 Mac 上）：`bash tools/build_macos.sh`（會先執行 `tools/prepare_mariadb_mac.sh` 從 Homebrew 封存下載 MariaDB）。
 
+## 手機版（Android；iPhone／iPad 規劃中）
+- 安裝 `ZMSAccounting-<版本>-android.apk`（第一次需允許「安裝未知應用程式」）。
+- 手機不直接連資料庫：在電腦版「系統管理 → 手機連線」打開服務，手機相機掃描畫面上的 QR Code 即自動連線；手機用自己的帳號登入，權限每次由電腦檢查。
+- 功能與電腦版相同（備份、還原、版本更新、手機連線設定除外）；報表可匯出或另存網頁列印；朗讀重點的語音由電腦產生。
+- **外出連線**：同一頁打開「外出連線（Cloudflare 加密通道）」——快速通道免帳號（網址每次啟動會變）、或貼上 Cloudflare 具名通道權杖使用自己的固定網址。手機會記住公司內與外出網址，離開公司自動切換。第一次啟用會從 Cloudflare 官方 GitHub 下載 cloudflared。
+- 伺服器模式（不開視窗）：`ZMSAccounting.exe --server [--port 8765]`，適合一直開著的公司電腦；設定中啟用外出連線時也會一起啟動。
+- 建置（在 Mac 上）：`bash tools/build_android.sh`；簽章金鑰 `android/zmsaccounting.jks` 不進 git，請另外備份。
+
 ## 安裝（Windows 10／11 64 位元）
 1. 執行 `ZMSAccounting-Setup-<版本>.exe`（不需系統管理員權限，裝在 `%LOCALAPPDATA%\Programs\ZMSAccounting`）。
 2. 安裝時可勾選「建立桌面捷徑」；開始功能表也會有捷徑。

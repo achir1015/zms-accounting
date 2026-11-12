@@ -39,6 +39,15 @@ BOOKS_METHODS = allowed_methods(Books)
 REPORTS_METHODS = allowed_methods(Reports)
 
 
+def client_ip(peer, headers):
+    """來源 IP：經 Cloudflare 通道進來的請求都來自本機，才採信 Cloudflare 提供的真實 IP 標頭
+    （區網直接連線不採信標頭，避免偽造來繞過登入封鎖）。"""
+    if peer in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+        real = headers.get("Cf-Connecting-Ip") or (headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        return real or peer
+    return peer
+
+
 def public_user(u):
     return {k: v for k, v in (u or {}).items() if k != "pw_hash"}
 
@@ -94,7 +103,7 @@ class ApiServer:
                     if n > 20 * 1024 * 1024:
                         return self._send(413, {"error": "資料太大"})
                     body = wire.loads(self.rfile.read(n) or b"{}")
-                    ip = self.headers.get("X-Forwarded-For", self.client_address[0]).split(",")[0].strip()
+                    ip = client_ip(self.client_address[0], self.headers)
                     if self.path == "/api/login":
                         code, out = api.login(body, ip)
                     elif self.path == "/api/call":
@@ -144,22 +153,25 @@ class ApiServer:
             self.db.close()
         return {"app": APP_NAME, "version": APP_VERSION, "api": API_VERSION, "company": comp}
 
-    def _blocked(self, ip):
+    def _blocked(self, key, limit=FAIL_LIMIT):
         now = time.time()
         with self.lock:
-            lst = [t for t in self.fails.get(ip, []) if now - t < FAIL_WINDOW]
-            self.fails[ip] = lst
-            return len(lst) >= FAIL_LIMIT
+            lst = [t for t in self.fails.get(key, []) if now - t < FAIL_WINDOW]
+            self.fails[key] = lst
+            return len(lst) >= limit
 
     def login(self, body, ip):
-        if self._blocked(ip):
+        uid_key = "uid:" + str(body.get("uid", "")).strip().lower()
+        if self._blocked(ip) or self._blocked(uid_key, FAIL_LIMIT + 4):
             return 429, {"error": "登入失敗次數太多，請 15 分鐘後再試"}
         b = Books(self.db)
         try:
             b.login(body.get("uid", ""), body.get("pw", ""))
         except BizError as e:
             with self.lock:
-                self.fails.setdefault(ip, []).append(time.time())
+                now = time.time()
+                self.fails.setdefault(ip, []).append(now)
+                self.fails.setdefault(uid_key, []).append(now)   # 同一帳號從不同 IP 猜密碼也會被擋
             return 401, {"error": str(e)}
         b.log("mobile_login", b.uid, ip)
         tok = secrets.token_urlsafe(32)

@@ -179,6 +179,9 @@ class App:
                     self.start_api()
                 except Exception:
                     log.exception("api autostart")
+            if self.st.extra.get("tunnel_enabled"):
+                import threading as _t
+                _t.Thread(target=self._autostart_tunnel, daemon=True).start()
             self.login()
         except Exception as e:
             log.exception("boot")
@@ -530,9 +533,36 @@ class App:
         self.api.start()
 
     def stop_api(self):
+        self.stop_tunnel()
         if self.api:
             self.api.stop()
             self.api = None
+
+    def _autostart_tunnel(self):
+        try:
+            self.start_tunnel()
+        except Exception:
+            log.exception("tunnel autostart")
+
+    # ---- 外出連線（Cloudflare 通道）
+    def start_tunnel(self, progress=None):
+        from ..tunnel import Tunnel
+        self.start_api()
+        x = self.st.extra
+        if getattr(self, "tunnel", None) and self.tunnel.running:
+            return self.tunnel.url
+        self.tunnel = Tunnel(self.api.port, x.get("tunnel_mode") or "quick", x.get("tunnel_token", ""),
+                             x.get("tunnel_url", ""))
+        url = self.tunnel.start(progress=progress)
+        log.info("tunnel: %s %s", self.tunnel.mode, url)
+        return url
+
+    def stop_tunnel(self):
+        t = getattr(self, "tunnel", None)
+        if t:
+            t.stop()
+            self.tunnel = None
+            log.info("tunnel: stopped")
 
     def shutdown(self):
         speaker.stop()

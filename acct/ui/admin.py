@@ -351,6 +351,34 @@ class MobileLink(ft.Column):
         self.sw = T.switch("啟用手機連線服務", bool(self.app.api and self.app.api.running), on_change=self.toggle)
         self.status = ft.Container()
         self.urls = ft.Row(wrap=True, spacing=14, run_spacing=14)
+        # 外出連線（Cloudflare 通道）
+        x = st.extra
+        self.t_mode = ft.RadioGroup(value=x.get("tunnel_mode") or "quick", on_change=lambda e: self.render_tunnel(),
+                                    content=ft.Column([
+                                        ft.Radio(value="quick", label="快速通道（免帳號；網址每次啟動會改變，手機要重新掃描）"),
+                                        ft.Radio(value="token", label="固定網址（需要 Cloudflare 帳號與自己的網域）")],
+                                        spacing=0))
+        self.t_token = T.field("Cloudflare 通道權杖（Tunnel token）", x.get("tunnel_token", ""), password=True,
+                               can_reveal_password=True, width=520)
+        self.t_url = T.field("公開網址", x.get("tunnel_url", ""), width=520, hint_text="例：https://acct.mycompany.com")
+        self.t_fixed = ft.Column([self.t_token, self.t_url,
+                                  T.muted("在 Cloudflare 網站 Zero Trust → Networks → Tunnels 建立通道，"
+                                          "Public Hostname 的服務填 http://localhost:" +
+                                          str(x.get("api_port") or 8765) + "，再把權杖與網址貼在這裡。", 12)],
+                                 spacing=10)
+        self.t_sw = T.switch("啟用外出連線", bool(getattr(self.app, "tunnel", None) and self.app.tunnel.running),
+                             on_change=self.toggle_tunnel)
+        self.t_bar = ft.ProgressBar(visible=False, color=T.ACCENT, bgcolor="#E6F4F1", bar_height=6, border_radius=3)
+        self.t_status = ft.Container()
+        self.t_qr = ft.Container()
+        outside = T.card(ft.Column([
+            ft.Row([T.icon_tile(ft.Icons.PUBLIC, "violet", 44),
+                    ft.Column([ft.Text("外出連線（Cloudflare 加密通道）", size=15, weight=ft.FontWeight.W_700),
+                               T.muted("手機在外面用行動網路也能連回這台電腦；全程 HTTPS 加密，不需要設定路由器。"
+                                       "第一次啟用會自動下載 Cloudflare 官方的 cloudflared 程式。", 12)],
+                              spacing=2, expand=True)], spacing=12),
+            self.t_mode, self.t_fixed, ft.Row([self.t_sw, self.t_status], spacing=16, wrap=True), self.t_bar,
+            self.t_qr], spacing=12), padding=18)
         super().__init__([
             T.page_header(ft.Icons.PHONE_ANDROID, "手機連線", "讓 Android／iPhone／iPad 透過這台電腦使用會計系統", "rose"),
             T.card(ft.Column([
@@ -361,13 +389,63 @@ class MobileLink(ft.Column):
                 T.muted("第一次啟用時，Windows 會詢問是否允許網路存取，請勾選「私人網路」後按「允許」。", 12)],
                 spacing=10), padding=18),
             ft.Text("公司內（同一個 Wi-Fi）", size=16, weight=ft.FontWeight.W_700),
-            self.urls,
-            T.card(ft.Row([T.icon_tile(ft.Icons.PUBLIC, "violet", 44),
-                           ft.Column([ft.Text("外出連線", size=15, weight=ft.FontWeight.W_700),
-                                      T.muted("外出時透過加密的公開網址連回這台電腦，設定方式請見下一版說明。", 12)],
-                                     spacing=2, expand=True)], spacing=12), padding=16)],
+            self.urls, outside],
             spacing=14, expand=True, scroll=ft.ScrollMode.AUTO)
         self.render(refresh=False)
+        self.render_tunnel(refresh=False)
+
+    def render_tunnel(self, refresh=True):
+        t = getattr(self.app, "tunnel", None)
+        on = bool(t and t.running and t.url)
+        self.t_fixed.visible = self.t_mode.value == "token"
+        self.t_status.content = T.chip("已連線：%s" % t.url if on else "已關閉", "green" if on else "slate",
+                                       ft.Icons.PUBLIC if on else ft.Icons.PUBLIC_OFF)
+        if on:
+            self.t_qr.content = ft.Row([
+                ft.Image(src=qr_png(deep_link(t.url)), width=200, height=200),
+                ft.Column([ft.Text(t.url, size=15, weight=ft.FontWeight.W_700, color=T.PRIMARY, selectable=True),
+                           T.muted("在公司時先掃這個 QR Code；手機會記住，外出時自動改用這個網址。", 12),
+                           T.muted("快速通道每次重新啟動網址都會改變，屆時請重新掃描。" if t.mode == "quick" else
+                                   "固定網址不會改變，掃描一次即可。", 12)], spacing=6, expand=True)],
+                spacing=16, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        else:
+            self.t_qr.content = None
+        if refresh:
+            self.update()
+
+    def toggle_tunnel(self, e):
+        x = self.app.st.extra
+        x["tunnel_mode"] = self.t_mode.value
+        x["tunnel_token"] = (self.t_token.value or "").strip()
+        x["tunnel_url"] = (self.t_url.value or "").strip()
+        if not self.t_sw.value:
+            self.app.stop_tunnel()
+            x["tunnel_enabled"] = False
+            self.app.st.save()
+            self.ctx.books.log("tunnel", "off")
+            self.render_tunnel()
+            return
+        self.t_bar.visible, self.t_bar.value = True, None
+        self.t_status.content = T.chip("連線中（第一次會先下載 cloudflared）…", "amber", ft.Icons.HOURGLASS_TOP)
+        self.update()
+
+        def work():
+            def prog(v):
+                self.t_bar.value = v
+                self.t_bar.update()
+            try:
+                url = self.app.start_tunnel(progress=prog)
+                x["tunnel_enabled"], x["api_enabled"] = True, True
+                self.app.st.save()
+                self.ctx.books.log("tunnel", "on", url)
+                self.sw.value = True
+            except Exception as ex:
+                self.t_sw.value = False
+                self.ctx.toast("外出連線失敗：%s" % ex, True)
+            self.t_bar.visible = False
+            self.render(refresh=False)
+            self.render_tunnel()
+        self.ctx.page.run_thread(work)
 
     def toggle(self, e):
         st = self.app.st
@@ -385,6 +463,9 @@ class MobileLink(ft.Column):
         st.extra["api_enabled"] = bool(self.sw.value)
         st.save()
         self.ctx.books.log("mobile_service", "on" if self.sw.value else "off", str(st.extra["api_port"]))
+        if not self.sw.value:
+            self.t_sw.value = False                 # 關掉手機連線，外出通道也一起停止
+        self.render_tunnel(refresh=False)
         self.render()
 
     def render(self, refresh=True):
@@ -419,7 +500,7 @@ ACTIONS = {"login": "登入", "logout": "登出", "login_fail": "登入失敗", 
            "master_delete": "刪除基本資料", "template_save": "儲存常用分錄", "template_delete": "刪除常用分錄",
            "backup": "備份", "restore": "還原", "update": "版本更新", "budget_save": "儲存預算",
            "mobile_login": "手機登入", "mobile_logout": "手機登出", "mobile_service": "手機連線服務",
-           "ratio_save": "儲存比率公式", "ratio_delete": "刪除比率公式", "import": "匯入"}
+           "ratio_save": "儲存比率公式", "ratio_delete": "刪除比率公式", "import": "匯入", "tunnel": "外出連線"}
 
 
 class Audit(ft.Column):

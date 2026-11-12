@@ -30,6 +30,16 @@ def run(port=None):
     print("會計系統伺服器模式已啟動，手機連線網址：")
     for ip in lan_addresses() or ["127.0.0.1"]:
         print("  http://%s:%d" % (ip, port))
+    tunnel = None
+    if st.extra.get("tunnel_enabled"):
+        from .tunnel import Tunnel
+        tunnel = Tunnel(port, st.extra.get("tunnel_mode") or "quick", st.extra.get("tunnel_token", ""),
+                        st.extra.get("tunnel_url", ""))
+        try:
+            print("  外出連線：%s" % tunnel.start())
+        except Exception as e:
+            print("  外出連線啟動失敗：%s" % e)
+            tunnel = None
     print("按 Ctrl+C 停止。")
     sys.stdout.flush()
     stop = threading.Event()
@@ -42,6 +52,8 @@ def run(port=None):
         while not stop.wait(1):
             pass
     finally:
+        if tunnel:
+            tunnel.stop()
         api.stop()
         db.close()
         if server:
