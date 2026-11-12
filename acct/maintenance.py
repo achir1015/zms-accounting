@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 
 from . import APP_ID, APP_NAME, APP_VERSION, GITHUB_REPO
@@ -75,12 +76,35 @@ def asset_suffix():
     return ""
 
 
+def _latest_via_page(timeout):
+    """GitHub API 有匿名次數限制（每小時 60 次／每個網路）；改從發佈頁的轉址取得最新版號（無次數限制）。"""
+    req = urllib.request.Request("https://github.com/%s/releases/latest" % GITHUB_REPO, method="HEAD",
+                                 headers={"User-Agent": APP_ID})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        final = r.geturl()                       # …/releases/tag/v1.2.3
+    tag = final.rstrip("/").rsplit("/", 1)[-1]
+    if "/tag/" not in final or not tag:
+        raise RuntimeError("找不到發佈版本")
+    ver = tag.lstrip("vV")
+    assets = []
+    if os.name == "nt":
+        name = "%s-Setup-%s.exe" % (APP_ID, ver)
+        assets = [dict(name=name, size=0, browser_download_url="https://github.com/%s/releases/download/%s/%s"
+                       % (GITHUB_REPO, tag, name))]
+    return dict(tag_name=tag, body="（更新內容請按「前往發佈頁」查看）", assets=assets, html_url=final)
+
+
 def check_update(timeout=8):
     """回傳 None（已是最新）或 dict(version, notes, url, size, name)。"""
     req = urllib.request.Request("https://api.github.com/repos/%s/releases/latest" % GITHUB_REPO,
                                  headers={"Accept": "application/vnd.github+json", "User-Agent": APP_ID})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        rel = json.loads(r.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            rel = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code not in (403, 429):
+            raise
+        rel = _latest_via_page(timeout)
     tag = rel.get("tag_name", "")
     if _ver(tag) <= _ver(APP_VERSION):
         return None
