@@ -4,6 +4,7 @@
 示範
 
 https://github.com/user-attachments/assets/fc5a3e79-8b59-4b57-bb44-90c9a4caaaa1
+<img width="1889" height="1077" alt="image" src="https://github.com/user-attachments/assets/d9f53e1a-2633-4b93-918a-1ad5c11aeeea" />
 
 單一公司使用的總帳會計系統：基本資料 → 傳票登錄 → 審核過帳 → 日記簿／分類帳 → 財務報表 → 關帳與年度結帳。
 資料庫使用 **MariaDB**（安裝版內附，程式開啟自動啟動、關閉自動停止）。
