@@ -1,9 +1,11 @@
-"""進銷存拋轉匯入：接收「資料助秘之一般公司進銷存」產生的傳票批次（.zmsgl 拋轉檔或直接傳送）。
+"""拋轉匯入：接收「資料助秘之一般公司進銷存」與「資料助秘之一般公司人事薪資差勤」產生的傳票批次
+（zms-gl 格式，.zmsgl 拋轉檔或直接傳送）。
 
-* 同一批次（batch_uid）只能匯入一次；匯入後產生「未審核」傳票（公司設定即時過帳時直接過帳），摘要前加 [進銷存]。
+* 同一批次（batch_uid）只能匯入一次；匯入後產生「未審核」傳票（公司設定即時過帳時直接過帳），
+  摘要前依來源加 [進銷存] 或 [人事薪資]。
 * 批次內需要的明細科目、客戶、廠商、部門若會計系統還沒有，會自動建立（科目須有上層科目）。
 * 整批一起成功或一起失敗；關帳月份、科目停用、借貸不平衡等都會擋下並說明是哪一張。
-* 取消匯入：批次內傳票都還是「未審核」時，可以整批刪除，進銷存端才能取消拋轉、修改單據。
+* 取消匯入：批次內傳票都還是「未審核」時，可以整批刪除，來源系統才能取消拋轉、修改單據。
 """
 import datetime as dt
 import json
@@ -20,9 +22,16 @@ def money(v):
     return B.money(v)
 
 FORMAT = "zms-gl"
-# 進銷存專用科目：(名稱, 正常餘額)
+# 拋轉來源可能用到、預設科目表沒有的科目：(名稱, 正常餘額)
 KNOWN_ACCOUNTS = {"1219": ("備抵存貨跌價損失", "C"), "5115": ("存貨盤盈虧", "D"), "5116": ("存貨報廢損失", "D"),
-                  "5117": ("存貨跌價及呆滯損失", "D")}
+                  "5117": ("存貨跌價及呆滯損失", "D"),
+                  # 人事薪資差勤
+                  "2145": ("應付休假給付", "C"), "2175": ("代扣自提勞退", "C")}
+
+
+def source_label(source):
+    """依批次的 source 判斷來源簡稱（摘要前綴、自動建立科目備註用）。"""
+    return "人事薪資" if "人事薪資" in (source or "") else "進銷存"
 
 
 class _DryRun(Exception):
@@ -59,7 +68,7 @@ class GLImportMixin:
     def _import(self, batch, allow_other_company, dry):
         self.need("VOU")
         if not isinstance(batch, dict) or batch.get("format") != FORMAT:
-            raise BizError("這不是進銷存拋轉檔（格式不符）")
+            raise BizError("這不是可匯入的拋轉檔（進銷存／人事薪資），格式不符")
         if int(batch.get("version") or 0) > 1:
             raise BizError("拋轉檔版本較新，請先更新會計系統")
         uid = str(batch.get("batch_uid") or "")
@@ -77,6 +86,7 @@ class GLImportMixin:
         vouchers = batch.get("vouchers") or []
         if not vouchers:
             raise BizError("拋轉檔裡沒有傳票")
+        label = source_label(batch.get("source"))
         created = dict(accounts=[], partners=[], departments=[])
         out_nos, out_ids, total = [], [], money(0)
         names = {a["code"]: a.get("name", "") for a in batch.get("accounts") or []}
@@ -98,7 +108,7 @@ class GLImportMixin:
                     if not nature:
                         nature = "C" if code[0] in "234" or code[:2] == "71" else "D"
                     self.db.exec("INSERT INTO accounts (code, name, parent, level, nature, memo) VALUES "
-                                 "(%s, %s, %s, 4, %s, '進銷存拋轉自動建立')", (code, nm[:60], parent, nature))
+                                 "(%s, %s, %s, 4, %s, %s)", (code, nm[:60], parent, nature, "%s拋轉自動建立" % label))
                     have[code] = dict(code=code, level=4, active=1)
                     created["accounts"].append("%s %s" % (code, nm))
                 # 2. 往來對象、部門
@@ -137,7 +147,7 @@ class GLImportMixin:
                     dr_cash = any(x["account"] in cash and x["debit"] for x in clean)
                     cr_cash = any(x["account"] in cash and x["credit"] for x in clean)
                     vtype = "收" if dr_cash and not cr_cash else "支" if cr_cash and not dr_cash else "轉"
-                    memo = ("[進銷存] %s" % (v.get("memo") or ref))[:200]
+                    memo = ("[%s] %s" % (label, v.get("memo") or ref))[:200]
                     preview.append(dict(ref=ref, date=d, v_type=vtype, memo=memo, total=tot, lines=clean))
                     total += tot
                     if dry:

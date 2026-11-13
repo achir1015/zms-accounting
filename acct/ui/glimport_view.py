@@ -1,4 +1,4 @@
-"""進銷存拋轉：匯入「資料助秘之一般公司進銷存」的拋轉檔，查看與取消匯入紀錄。"""
+"""拋轉匯入：匯入「資料助秘之一般公司進銷存」與「資料助秘之一般公司人事薪資差勤」的拋轉檔，查看與取消匯入紀錄。"""
 import json
 
 import flet as ft
@@ -14,15 +14,16 @@ class GLImport(ft.Column):
                             ("period", "交易期間", "s", 170), ("voucher_count", "傳票張數", "s", 70),
                             ("total", "借貸金額", "n", 120), ("voucher_nos", "傳票號碼", "s", 220),
                             ("imported_by", "匯入人", "s", 80), ("at", "匯入時間", "s", 140), ("st", "狀態", "s", 90)],
-                           on_pick=self.detail, empty="尚未匯入任何進銷存拋轉")
+                           on_pick=self.detail, empty="尚未匯入任何拋轉批次")
         tip = T.card(ft.Row([T.icon_tile(ft.Icons.SYNC_ALT, "teal", 44), ft.Column([
-            ft.Text("兩種方式把進銷存的交易轉成傳票", size=15, weight=ft.FontWeight.W_700, color=T.TEXT),
-            T.muted("① 進銷存「會計拋轉」匯出拋轉檔（.zmsgl）→ 在這裡按「匯入拋轉檔」。"
-                    "② 這台電腦打開「系統管理 → 手機連線」服務後，進銷存可以直接傳送，結果也會列在下面。", 12),
-            T.muted("匯入的傳票是「未審核」，摘要前有 [進銷存]，請到審核過帳確認；同一批次不會重複匯入。"
+            ft.Text("兩種方式把進銷存、人事薪資的交易轉成傳票", size=15, weight=ft.FontWeight.W_700, color=T.TEXT),
+            T.muted("① 在進銷存或人事薪資差勤的「會計拋轉」匯出拋轉檔（.zmsgl）→ 在這裡按「匯入拋轉檔」。"
+                    "② 這台電腦打開「系統管理 → 手機連線」服務後，兩套系統都可以直接傳送，結果也會列在下面。", 12),
+            T.muted("匯入的傳票是「未審核」，摘要前有 [進銷存] 或 [人事薪資]，請到審核過帳確認；同一批次不會重複匯入。"
                     "缺少的明細科目、客戶、廠商、部門會自動建立。", 12)], spacing=2, expand=True)], spacing=14),
             padding=14)
-        super().__init__([T.page_header(ft.Icons.SYNC_ALT, "進銷存拋轉", "匯入一般公司進銷存系統產生的傳票", "teal",
+        super().__init__([T.page_header(ft.Icons.SYNC_ALT, "拋轉匯入（進銷存／人事薪資）",
+                                        "匯入一般公司進銷存、人事薪資差勤系統產生的傳票", "teal",
                                         [T.btn("匯入拋轉檔", ft.Icons.UPLOAD_FILE, self.pick)]),
                           tip, self.grid], spacing=12, expand=True)
         self.load(refresh=False)
@@ -39,7 +40,7 @@ class GLImport(ft.Column):
             self.update()
 
     async def pick(self, e):
-        files = await ft.FilePicker().pick_files(dialog_title="選擇進銷存拋轉檔", allowed_extensions=["zmsgl", "json"],
+        files = await ft.FilePicker().pick_files(dialog_title="選擇拋轉檔（進銷存／人事薪資）", allowed_extensions=["zmsgl", "json"],
                                                  with_data=T.MOBILE)
         if not files:
             return
@@ -75,7 +76,7 @@ class GLImport(ft.Column):
             if made[k]:
                 extra.append(T.muted("%s：%s" % (title, "、".join(made[k][:12]) + ("…" if len(made[k]) > 12 else "")), 12))
         head = ft.Column([
-            ft.Text("%s　批次 %s" % (pv.get("source") or "進銷存", pv.get("batch_no", "")), size=14,
+            ft.Text("%s　批次 %s" % (pv.get("source") or "拋轉檔", pv.get("batch_no", "")), size=14,
                     weight=ft.FontWeight.W_700),
             T.muted("來源公司：%s　交易期間：%s～%s" % ((pv.get("company") or {}).get("name", ""),
                                                  _show(pv.get("date_from")), _show(pv.get("date_to"))), 12),
@@ -89,7 +90,7 @@ class GLImport(ft.Column):
                 nos = res.get("voucher_nos") or []
                 c.toast("已匯入 %d 張傳票（%s）" % (len(nos), "%s～%s" % (nos[0], nos[-1]) if nos else ""))
                 self.load()
-        c.dialog("匯入進銷存拋轉", ft.Column([head, g], tight=True, spacing=10),
+        c.dialog("匯入拋轉檔", ft.Column([head, g], tight=True, spacing=10),
                  [T.btn("取消", kind="ghost", on_click=lambda e: c.close()),
                   T.btn("確定匯入", ft.Icons.DOWNLOAD_DONE, go)], icon=ft.Icons.SYNC_ALT, tone="teal", width=680)
 
@@ -105,7 +106,7 @@ class GLImport(ft.Column):
         actions = [T.btn("關閉", kind="ghost", on_click=lambda e: c.close())]
         if r["status"] == 1:
             def cancel():
-                if c.guard(c.books.cancel_gl_import, r["batch_uid"], ok="已取消匯入並刪除該批傳票；請到進銷存取消拋轉"):
+                if c.guard(c.books.cancel_gl_import, r["batch_uid"], ok="已取消匯入並刪除該批傳票；請到來源系統（進銷存／人事薪資）取消拋轉"):
                     self.load()
             actions.insert(0, T.btn("取消匯入（刪除這批傳票）", ft.Icons.DELETE_OUTLINE,
                                     lambda e: (c.close(), c.confirm(

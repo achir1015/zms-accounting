@@ -32,7 +32,7 @@ def menu():
             ("voucher_entry", "傳票登錄", I.EDIT_NOTE, "VOU", 2),
             ("voucher_list", "傳票查詢", I.MANAGE_SEARCH, "VOU", 1),
             ("voucher_review", "審核過帳", I.FACT_CHECK, "APR", 2),
-            ("gl_import", "進銷存拋轉", I.SYNC_ALT, "VOU", 2)]),
+            ("gl_import", "拋轉匯入", I.SYNC_ALT, "VOU", 2)]),
         ("帳簿查詢", I.MENU_BOOK, "amber", [
             ("journal", "日記簿", I.MENU_BOOK, "LED", 1),
             ("ledger", "明細分類帳", I.LIST_ALT, "LED", 1),

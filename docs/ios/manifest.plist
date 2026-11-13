@@ -23,7 +23,7 @@
       <key>metadata</key>
       <dict>
         <key>bundle-identifier</key><string>com.achir.zmsaccounting</string>
-        <key>bundle-version</key><string>1.4.0</string>
+        <key>bundle-version</key><string>1.4.1</string>
         <key>kind</key><string>software</string>
         <key>title</key><string>資料助秘之一般公司會計</string>
       </dict>
